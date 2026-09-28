@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import itertools
 import math
 from typing import Any, Mapping, Protocol, Sequence
 
@@ -97,7 +98,9 @@ class HBServeExecutor(Protocol):
     def execute(self, batch: CanonicalServingBatch) -> BatchExecution: ...
 
 
-@dataclass
+# A request state is its own identity: two distinct states never describe the
+# same request, so membership and removal compare objects, not their fields.
+@dataclass(eq=False)
 class _RequestState:
     request: RequestSpec
     order: int
@@ -171,6 +174,13 @@ class HBServeEngine:
             for index, request in enumerate(request_trace.requests)
         ]
         self._by_id = {state.request.request_id: state for state in self._states}
+        # Without request groups arrivals never change, so the states stay in
+        # (arrival, order) order here and an iteration walks them from the
+        # first unfinished one instead of re-sorting every arrival.
+        self._sorted_states = sorted(self._states, key=lambda state: state.sort_key)
+        self._first_open = 0
+        self._unfinished = len(self._states)
+        self._unadmitted = len(self._states)
         self._batch_records: list[dict[str, Any]] = []
         self._preemptions: list[dict[str, Any]] = []
         # V1 schedules existing running requests in admission order, including
@@ -269,30 +279,82 @@ class HBServeEngine:
             }
         )
 
+    @property
+    def unfinished_requests(self) -> int:
+        """Offered requests that have not completed."""
+        return self._unfinished
+
+    @property
+    def unadmitted_requests(self) -> int:
+        """Offered requests that are not admitted (waiting or not yet arrived)."""
+        return self._unadmitted
+
+    def _set_admitted(self, state: _RequestState, admitted: bool) -> None:
+        if state.admitted != admitted:
+            self._unadmitted += -1 if admitted else 1
+            state.admitted = admitted
+
+    def _iteration_requests(self, frontier: float):
+        """This iteration's release time, running requests and waiting requests.
+
+        Waiting requests are the resumed ones, then every other unfinished
+        arrival in (arrival, order) order. Without request groups the arrivals
+        are walked lazily from the first unfinished request and stop as soon as
+        admission stops, so an iteration visits only the requests it considers
+        rather than every waiting request.
+        """
+        if self._request_groups:
+            unfinished = self._runnable_states()
+            if not unfinished:
+                raise HBServeError("scheduler was called after completion")
+            scheduler_now = frontier
+            if not any(state.request.arrival_ns <= frontier for state in unfinished):
+                scheduler_now = min(state.request.arrival_ns for state in unfinished)
+            arrived = sorted(
+                (
+                    state
+                    for state in unfinished
+                    if state.request.arrival_ns <= scheduler_now
+                ),
+                key=lambda state: state.sort_key,
+            )
+            running = [state for state in self._running if state in arrived]
+            waiting = [state for state in self._resumed if state in arrived]
+            waiting += [state for state in arrived if state not in running and state not in waiting]
+            return scheduler_now, running, waiting
+        states = self._sorted_states
+        while self._first_open < len(states) and states[self._first_open].complete:
+            self._first_open += 1
+        if self._first_open == len(states):
+            raise HBServeError("scheduler was called after completion")
+        earliest = states[self._first_open].request.arrival_ns
+        scheduler_now = frontier if earliest <= frontier else earliest
+        running = [state for state in self._running if state.request.arrival_ns <= scheduler_now]
+        resumed = [state for state in self._resumed
+                   if not state.complete and state.request.arrival_ns <= scheduler_now]
+        # Membership is fixed when the iteration starts, as for a list built
+        # before admission; admissions during the walk do not change it.
+        taken = {id(state) for state in running} | {id(state) for state in resumed}
+
+        def arrivals():
+            for state in states[self._first_open:]:
+                if state.request.arrival_ns > scheduler_now:
+                    return
+                if not state.complete and id(state) not in taken:
+                    yield state
+        return scheduler_now, running, itertools.chain(resumed, arrivals())
+
     def _next_schedule(
         self, batch_id: int
     ) -> tuple[ScheduledBatch, Mapping[str, Any]]:
-        frontier = self.executor.frontier_ns
-        unfinished = self._runnable_states()
-        if not unfinished:
-            raise HBServeError("scheduler was called after completion")
-        scheduler_now = frontier
-        if not any(state.request.arrival_ns <= frontier for state in unfinished):
-            scheduler_now = min(state.request.arrival_ns for state in unfinished)
-        arrived = sorted(
-            (
-                state
-                for state in unfinished
-                if state.request.arrival_ns <= scheduler_now
-            ),
-            key=lambda state: state.sort_key,
-        )
-        running = [state for state in self._running if state in arrived]
-        waiting = [state for state in self._resumed if state in arrived]
-        waiting += [state for state in arrived if state not in running and state not in waiting]
+        scheduler_now, running, waiting = self._iteration_requests(self.executor.frontier_ns)
+        waiting = iter(waiting)
+        oldest_waiting = None if running else next(waiting, None)
+        if oldest_waiting is not None:
+            waiting = itertools.chain((oldest_waiting,), waiting)
         # One model per iteration: the oldest running request's model, or the
         # oldest arrival's when nothing is decoding.
-        model_id = (running or waiting)[0].request.model_id
+        model_id = (running[0] if running else oldest_waiting).request.model_id
         budget_tokens = self.policy.max_batch_tokens
         selected: list[tuple[_RequestState, BatchSlice]] = []
         reservations = []
@@ -340,12 +402,12 @@ class HBServeEngine:
                 state.processed = cached_tokens
                 state.prefix_hit_tokens = cached_tokens
                 state.hot_kv_blocks = cached_tokens > 0
-                state.admitted = True
+                self._set_admitted(state, True)
             batch_slice = self._slice_for(state, budget_tokens)
             if not self.executor.can_reserve(tuple(s for _, s in selected) + (batch_slice,)):
                 if newly_admitted:
                     self.executor.release_request(state.request.request_id)
-                    state.admitted = False
+                    self._set_admitted(state, False)
                     state.processed = state.prefix_hit_tokens = 0
                     state.hot_kv_blocks = False
                 break
@@ -401,6 +463,7 @@ class HBServeEngine:
                             "request completed without processing its lifetime"
                         )
                     state.completion_ns = finish_ns
+                    self._unfinished -= 1
                     self.executor.release_request(state.request.request_id)
                     state.hot_kv_blocks = False
                     if state in self._running:
@@ -408,7 +471,7 @@ class HBServeEngine:
 
     def run(self) -> dict[str, Any]:
         batch_id = 0
-        while any(not state.complete for state in self._states):
+        while self._unfinished:
             schedule, reservation = self._next_schedule(batch_id)
             canonical = self.compiler.compile(schedule)
             execution = self.executor.execute(canonical)

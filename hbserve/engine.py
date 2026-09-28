@@ -289,6 +289,44 @@ class HBServeEngine:
         """Offered requests that are not admitted (waiting or not yet arrived)."""
         return self._unadmitted
 
+    def offer(self, requests: Sequence[RequestSpec]) -> None:
+        """Offer more requests to an engine its caller steps itself.
+
+        A caller that drives ``_next_schedule`` and ``_apply_completion``
+        itself can stream a long one-model source instead of building it
+        whole. Offered requests must sort after every request already
+        offered (arrival, then offer order). An iteration walks the waiting
+        requests in that order, stops at the first that has not arrived, and
+        visits at most one more than the ``max_batch_requests`` it can
+        admit, so no later request can change a schedule while more than
+        ``max_batch_requests`` offered requests wait unadmitted. Offering the
+        rest of the source before that, or once every offered request has
+        finished, schedules exactly as offering it whole at construction.
+        ``run`` executes only the constructed trace, and request groups fix
+        the offered requests.
+        """
+        if self._request_groups:
+            raise HBServeError("request groups fix the offered requests")
+        states = [
+            _RequestState(request=request, order=len(self._states) + index)
+            for index, request in enumerate(requests)
+        ]
+        identifiers = [state.request.request_id for state in states]
+        if len(set(identifiers)) != len(identifiers) or any(
+            identifier in self._by_id for identifier in identifiers
+        ):
+            raise HBServeError("offered request IDs must be new and distinct")
+        if any(state.request.model_id not in self.models for state in states):
+            raise HBServeError("offered requests name an unknown model")
+        ordered = sorted(states, key=lambda state: state.sort_key)
+        if ordered and self._sorted_states and ordered[0].sort_key < self._sorted_states[-1].sort_key:
+            raise HBServeError("offered requests must not arrive before an offered request")
+        self._states.extend(states)
+        self._by_id.update(zip(identifiers, states))
+        self._sorted_states.extend(ordered)
+        self._unfinished += len(states)
+        self._unadmitted += len(states)
+
     def _set_admitted(self, state: _RequestState, admitted: bool) -> None:
         if state.admitted != admitted:
             self._unadmitted += -1 if admitted else 1
@@ -470,6 +508,8 @@ class HBServeEngine:
                         self._running.remove(state)
 
     def run(self) -> dict[str, Any]:
+        if len(self._states) != len(self.request_trace.requests):
+            raise HBServeError("run executes the constructed trace; offered requests are step-driven only")
         batch_id = 0
         while self._unfinished:
             schedule, reservation = self._next_schedule(batch_id)

@@ -1294,6 +1294,67 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(result["scheduler"]["iterations_by_kind"]["mixed"], 1)
         self.assertEqual(result["scheduler"]["policy"]["batch_phase_policy"], "mixed_iteration_v1")
 
+    def test_offering_a_source_in_pieces_schedules_as_offering_it_whole(self) -> None:
+        # Arrival ties inside and across pieces and a gap the scheduler jumps;
+        # a piece is offered once no more than a batch of requests waits.
+        model = _dense()
+        arrivals = (0.0, 0.0, 100.0, 100.0, 100.0, 1000.0, 1000.0, 5000.0)
+        lengths = ((5, 3), (3, 1), (6, 2), (2, 4), (4, 2), (5, 3), (3, 1), (2, 2))
+        requests = tuple(RequestSpec(f"r{i}", arrival, model.model_id, prompt, output)
+                         for i, (arrival, (prompt, output)) in enumerate(zip(arrivals, lengths)))
+        pieces = (requests[:4], requests[4:5], requests[5:7], requests[7:])
+        policy = SchedulerPolicy(max_batch_requests=2, max_batch_tokens=8, prefill_chunk_tokens=4)
+
+        class StepExecutor:
+            frontier_ns = 0.0
+
+            def admit_request(self, request: RequestSpec) -> int:
+                return 0
+
+            def can_reserve(self, slices: Sequence[Any]) -> bool:
+                return True
+
+            def reserve(self, batch_id: int, slices: Sequence[Any]) -> dict[str, Any]:
+                return {}
+
+            def release_request(self, request_id: str) -> None:
+                pass
+
+        def drive(offered: Sequence[RequestSpec], rest: list[Sequence[RequestSpec]]) -> list[Any]:
+            trace = _trace(*offered)
+            executor = StepExecutor()
+            engine = HBServeEngine(
+                models={model.model_id: model}, request_trace=trace,
+                compiler=argparse.Namespace(models={model.model_id: model}, request_trace=trace, timing=None),
+                executor=executor, policy=policy)
+            schedules = []
+            while engine.unfinished_requests or rest:
+                while rest and (not engine.unfinished_requests
+                                or engine.unadmitted_requests <= policy.max_batch_requests):
+                    engine.offer(rest.pop(0))
+                schedule, _ = engine._next_schedule(len(schedules))
+                executor.frontier_ns = max(executor.frontier_ns, schedule.not_before_ns) + 60.0
+                engine._apply_completion(schedule, executor.frontier_ns)
+                schedules.append(schedule.canonical())
+            with self.assertRaises(HBServeError):
+                engine.offer((replace(requests[0], request_id="late", arrival_ns=4000.0),))
+            with self.assertRaises(HBServeError):
+                engine.offer((requests[7],))
+            return schedules
+
+        whole = drive(requests, [])
+        self.assertEqual(drive(pieces[0], list(pieces[1:])), whole)
+        self.assertEqual({item["request_id"] for batch in whole for item in batch["slices"]},
+                         {request.request_id for request in requests})
+        streamed = HBServeEngine(
+            models={model.model_id: model}, request_trace=_trace(*pieces[0]),
+            compiler=argparse.Namespace(models={model.model_id: model}, request_trace=_trace(*pieces[0]),
+                                        timing=None),
+            executor=StepExecutor(), policy=policy)
+        streamed.offer(pieces[1])
+        with self.assertRaises(HBServeError):
+            streamed.run()
+
     def test_chunked_prefill_emits_exactly_one_first_token(self) -> None:
         model = _dense()
         request = RequestSpec("r0", 0.0, model.model_id, 3, 1)

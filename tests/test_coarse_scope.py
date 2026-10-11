@@ -2,14 +2,14 @@ from dataclasses import replace
 from pathlib import Path
 import unittest
 
-from hbserve.compiler import HBServeCompiler
-from hbserve.coarse_catalog import CatalogCoverageCompiler
-from hbserve.coarse_analytic import AnalyticCoverageCompiler, build_profile
-from hbserve.coarse_coverage import CoarseCoverageCompiler, CoarseCoverageProfile
-from hbserve.coarse_l2 import CoarseL2Compiler
-from hbserve.contracts import BatchSlice, ScheduledBatch, LinearTimingProvider, RooflineTimingProvider, HBServeError
-from hbserve.catalog import load_model_any
-from hbserve.io import load_request_trace
+from serveloop.compiler import ServeLoopCompiler
+from serveloop.coarse_catalog import CatalogCoverageCompiler
+from serveloop.coarse_analytic import AnalyticCoverageCompiler, build_profile
+from serveloop.coarse_coverage import CoarseCoverageCompiler, CoarseCoverageProfile
+from serveloop.coarse_l2 import CoarseL2Compiler
+from serveloop.contracts import BatchSlice, ScheduledBatch, LinearTimingProvider, RooflineTimingProvider, ServeLoopError
+from serveloop.catalog import load_model_any
+from serveloop.io import load_request_trace
 from test_coarse_catalog import setup
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,7 +31,7 @@ class ExtendedScopeTests(unittest.TestCase):
             for timing in (None, RooflineTimingProvider(200, .5),
                            LinearTimingProvider(10, 2, 5, 3, moe_routing_fraction=.2)):
                 opts = dict(kw, **({'timing': timing} if timing else {}))
-                original = HBServeCompiler(**opts)
+                original = ServeLoopCompiler(**opts)
                 enhanced = CatalogCoverageCompiler(**opts)
                 for batch in batches:
                     with self.subTest(model=path.name, timing=timing, batch=batch.batch_id):
@@ -94,9 +94,9 @@ class ExtendedScopeTests(unittest.TestCase):
         captured = CoarseCoverageCompiler(**kw, coverage_profile=profile)
         non_emitting = ScheduledBatch(0, model.model_id,
             (BatchSlice('observed-request', 0, 16, 0, False, 'prefill'),), 0.)
-        with self.assertRaisesRegex(HBServeError, 'output-emitting'):
+        with self.assertRaisesRegex(ServeLoopError, 'output-emitting'):
             captured.compile(non_emitting)
-        with self.assertRaisesRegex(HBServeError, 'captured coverage requires memory_only'):
+        with self.assertRaisesRegex(ServeLoopError, 'captured coverage requires memory_only'):
             CoarseCoverageCompiler(**kw, coverage_profile=profile,
                 timing=LinearTimingProvider(1, 1, 1, 1))
         # Two requests in one batch still require a distinct batching design.
@@ -106,7 +106,7 @@ class ExtendedScopeTests(unittest.TestCase):
         batch = ScheduledBatch(0, model.model_id, (
             BatchSlice('observed-request', 0, 16, 0, True, 'prefill'),
             BatchSlice('second', 0, 16, 0, True, 'prefill')), 0.)
-        with self.assertRaisesRegex(HBServeError, 'B1'):
+        with self.assertRaisesRegex(ServeLoopError, 'B1'):
             compiler.compile(batch)
 
 

@@ -9,12 +9,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
-from hbserve.contracts import HBServeError
-from hbserve.io import load_json_object, write_json_atomic
-from hbserve.windows.experiment import load_experiment_context
-from hbserve.windows.memory_trace import canonical_sha256
-from hbserve.windows.placement import access_profile, placement_order
-from hbserve.windows.remap import DirectAttachedRemapper, RemapError
+from serveloop.contracts import ServeLoopError
+from serveloop.io import load_json_object, write_json_atomic
+from serveloop.windows.experiment import load_experiment_context
+from serveloop.windows.memory_trace import canonical_sha256
+from serveloop.windows.placement import access_profile, placement_order
+from serveloop.windows.remap import DirectAttachedRemapper, RemapError
 from test_windows import tiny_experiment
 
 
@@ -79,7 +79,7 @@ class PlacementTests(unittest.TestCase):
         write_json_atomic(path, profile)
         config = {"policy": "profiled_hotset", "profile": str(path)}
         training_logical = profile["logical_trace_sha256"]
-        with self.assertRaisesRegex(HBServeError, "own training"):
+        with self.assertRaisesRegex(ServeLoopError, "own training"):
             placement_order(self.context.layout, config, 4096, self.context.trace.digest,
                             logical_trace_sha256=training_logical)
         experiment = load_json_object(self.path, "experiment")
@@ -93,14 +93,14 @@ class PlacementTests(unittest.TestCase):
         written = {unit["unit"] for unit in profile["units"] if unit["write_bytes"]}
         self.assertEqual(set(order[:len(written)]), written)
         self.assertFalse(detail["training_cost_included_in_measurement"])
-        with self.assertRaisesRegex(HBServeError, "granularity"):
+        with self.assertRaisesRegex(ServeLoopError, "granularity"):
             placement_order(measured.layout, config, 8192, measured.trace.digest,
                             logical_trace_sha256=measured_logical)
         profile["role"] = "measurement"
         wrong_profile = self.directory / "wrong-profile.json"
         write_json_atomic(wrong_profile, profile)
         config["profile"] = str(wrong_profile)
-        with self.assertRaisesRegex(HBServeError, "role"):
+        with self.assertRaisesRegex(ServeLoopError, "role"):
             placement_order(measured.layout, config, 4096, measured.trace.digest,
                             logical_trace_sha256=measured_logical)
 
@@ -117,10 +117,10 @@ class PlacementTests(unittest.TestCase):
         self.assertNotEqual(measured.trace.digest, self.context.trace.digest)
         self.assertEqual(measured_logical, profile["logical_trace_sha256"])
         config = {"policy": "profiled_hotset", "profile": str(profile_path)}
-        with self.assertRaisesRegex(HBServeError, "own training"):
+        with self.assertRaisesRegex(ServeLoopError, "own training"):
             placement_order(measured.layout, config, 4096, measured.trace.digest,
                             logical_trace_sha256=measured_logical)
-        with self.assertRaisesRegex(HBServeError, "logical trace digest"):
+        with self.assertRaisesRegex(ServeLoopError, "logical trace digest"):
             placement_order(measured.layout, config, 4096, measured.trace.digest)
 
 

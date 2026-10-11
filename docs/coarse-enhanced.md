@@ -11,9 +11,9 @@ Install from this checkout with `python -m pip install -e .`. Convert a supporte
 Hugging Face config without loading model weights:
 
 ```sh
-python -m hbserve model /path/to/config.json --hf-config \
+python -m serveloop model /path/to/config.json --hf-config \
   --dtype bfloat16 --output /path/to/model.json
-python -m hbserve run \
+python -m serveloop run \
   --model /path/to/model.json --requests /path/to/requests.json \
   --system /path/to/system.cfg --simulator /path/to/hbfsim \
   --placement weights-hbf-kv-hbm --timing memory_only --prefetch-depth 1 \
@@ -74,7 +74,7 @@ accesses, plus low-rank query/KV and compressed-context MLA accesses.
 For a public descriptor use the same run command, replacing the policy value:
 
 ```sh
-python -m hbserve run --model models/deepseek-v3-fp8-kv-bf16.json \
+python -m serveloop run --model models/deepseek-v3-fp8-kv-bf16.json \
   --requests /path/to/requests.json --router examples/ci-synthetic-router.json \
   --system /path/to/system.cfg --simulator /path/to/hbfsim \
   --placement weights-hbf-kv-hbm --timing memory_only --prefetch-depth 1 \
@@ -90,7 +90,7 @@ an arbitrary system configuration.
 To convert a public descriptor into portable native JSON with coverage geometry:
 
 ```sh
-python -m hbserve model models/llama31-8b-w8-kv-bf16.json \
+python -m serveloop model models/llama31-8b-w8-kv-bf16.json \
   --coverage-descriptor --output /path/to/model.json
 ```
 
@@ -118,7 +118,7 @@ accept `--timing roofline` as well as `memory_only`, and linear sensitivity
 timing through the original `--run-config` interface. For example:
 
 ```sh
-python -m hbserve run --model models/llama31-8b-w8-kv-bf16.json \
+python -m serveloop run --model models/llama31-8b-w8-kv-bf16.json \
   --requests /path/to/requests.json --system /path/to/system.cfg \
   --simulator /path/to/hbfsim --placement all-hbm --prefetch-depth 1 \
   --coarse-coverage-policy model-derived \
@@ -168,7 +168,7 @@ uncalibrated sensitivity results, not measured inference timing.
 
 ```json
 {
-  "schema": {"name": "hbserve.run_config", "version": 2},
+  "schema": {"name": "serveloop.run_config", "version": 2},
   "scheduler": {"max_batch_requests": 1, "max_batch_tokens": 8, "prefill_chunk_tokens": 8},
   "timing": {"type": "linear", "prefetch_depth": 1,
     "fixed_ns_per_layer": 100, "ns_per_token_per_layer": 10,

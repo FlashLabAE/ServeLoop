@@ -1,6 +1,6 @@
 {
   "schema": {
-    "name": "hbserve.run_config",
+    "name": "serveloop.run_config",
     "version": 2
   },
   "scheduler": {

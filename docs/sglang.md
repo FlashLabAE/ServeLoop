@@ -1,12 +1,12 @@
 # Native SGLang frontend
 
 This is an explicitly selected research frontend. The default interface is
-`hbserve run`, which uses HBServe's own scheduler and workload compiler and
+`serveloop run`, which uses ServeLoop's own scheduler and workload compiler and
 does not launch SGLang. Keep this frontend for studies of native SGLang
 scheduling and allocator behavior; see the [default workflow](../README.md#quick-start)
 for ordinary workload execution.
 
-`python -m hbserve.sglang run` executes timestamped token requests with the
+`python -m serveloop.sglang run` executes timestamped token requests with the
 native SGLang scheduler, RadixCache, admission, retraction and KV allocator.
 Only forward timing is supplied by the persistent production HBFSim engine.
 Every hardware configuration reruns scheduling. Recorded batches are evidence,
@@ -15,7 +15,7 @@ not a frozen schedule used for counterfactual timing.
 ## Runtime and source
 
 The optional runtime is pinned to SGLang
-`13d593b6cf885c5c4d50eea88c82b9e28cf5941e`. Base HBServe imports do not import
+`13d593b6cf885c5c4d50eea88c82b9e28cf5941e`. Base ServeLoop imports do not import
 SGLang or PyTorch. The exercised native runtime uses Python 3.12 on macOS arm64
 and Linux x86-64.
 Install `requirements/sglang-macos-arm64.txt` into a dedicated environment.
@@ -24,13 +24,13 @@ compatible CPU PyTorch/TorchVision first. Native Qwen3-8B Linux pilots cover
 all-HBM, peer weights-first, and tiered KV-first placement.
 
 Use the maintained `hbfsim_client` from the HBFSim source checkout, ahead of
-HBServe on `PYTHONPATH`. This matters when the HBServe checkout contains an
+ServeLoop on `PYTHONPATH`. This matters when the ServeLoop checkout contains an
 older bundled client. Build the matching HBFSim executable from that checkout.
 
 ```sh
-# From HBFSim, with HBServe in the neighboring directory:
-export PYTHONPATH="$PWD:../HBServe${PYTHONPATH:+:$PYTHONPATH}"
-python -m hbserve.sglang prepare --source tmp/sglang-native
+# From HBFSim, with ServeLoop in the neighboring directory:
+export PYTHONPATH="$PWD:../ServeLoop${PYTHONPATH:+:$PYTHONPATH}"
+python -m serveloop.sglang prepare --source tmp/sglang-native
 ```
 
 `prepare` fetches a separate source checkout and patches only predictor
@@ -56,13 +56,13 @@ five-minute serving default. This limit does not enter the simulated clock.
   including mixed batches. It observes actual Token/Paged allocator frees,
   including unused page padding. Request completion alone does not invalidate KV.
 - `model.py` derives dense Llama, Qwen2, Qwen3 and full-context Mistral geometry.
-  It reuses `HBServeCompiler` with actual input tokens instead of surrogate IDs.
+  It reuses `ServeLoopCompiler` with actual input tokens instead of surrogate IDs.
   BF16/FP16/FP32 weights, KV in model precision, and explicit BF16/FP8-E4M3 KV
   storage are supported by the pinned CPU runtime. Weight
   quantization, MoE and compressed/windowed attention are rejected explicitly.
 - `backend.py` maps immutable model objects and native slots to HBM, logical
-  HBF, or configured external backing. It does not run HBServe's scheduler or
-  block allocator. The fixed-window and synthetic HBServe frontends remain
+  HBF, or configured external backing. It does not run ServeLoop's scheduler or
+  block allocator. The fixed-window and synthetic ServeLoop frontends remain
   useful for their deterministic controlled experiments.
 - `layout.py` packs weights and KV into capacity-accounted physical extents.
   `--hbm-priority weights-first|kv-first` fills HBM in that order and spills
@@ -96,7 +96,7 @@ GPU kernel layout.
 ## Requests and execution
 
 Run the commands below from the HBFSim checkout, with both repositories on
-`PYTHONPATH`. System profiles are explicitly selected from HBServe; they target
+`PYTHONPATH`. System profiles are explicitly selected from ServeLoop; they target
 HBFSim `60e3f66` (see [configuration compatibility](configuration.md)).
 
 Each JSONL row contains integer `arrival_ns`, nonempty `token_ids`, and positive
@@ -106,13 +106,13 @@ An optional unique `request_id` is preserved in native results; otherwise IDs
 are assigned in input order. Native token JSONL keeps its first arrival time.
 
 ```sh
-python -m hbserve.sglang run \
+python -m serveloop.sglang run \
   --sglang-root tmp/sglang-native \
   --simulator build/hbfsim \
-  --system ../HBServe/configs/systems/eight-stack-baseline.cfg \
-  --system ../HBServe/configs/systems/sglang-small.cfg \
-  --model ../HBServe/examples/sglang/tiny-qwen3 \
-  --requests ../HBServe/examples/sglang/requests.jsonl \
+  --system ../ServeLoop/configs/systems/eight-stack-baseline.cfg \
+  --system ../ServeLoop/configs/systems/sglang-small.cfg \
+  --model ../ServeLoop/examples/sglang/tiny-qwen3 \
+  --requests ../ServeLoop/examples/sglang/requests.jsonl \
   --weight-tier hbf --kv-tier hbf --architecture tiered \
   --kv-cache-bytes 8192 --background-writeback-pages 1 \
   --max-total-tokens 128 --page-size 4 \
@@ -140,11 +140,11 @@ the registered Bailian artifact and runs three unchanged source requests:
 python -m workloads.production_request_trace download-source \
   --source-id qwen_bailian_trace_a --output-dir out/public-traces
 
-python -m hbserve.sglang run \
+python -m serveloop.sglang run \
   --sglang-root tmp/sglang-native --simulator build/hbfsim \
-  --system ../HBServe/configs/systems/eight-stack-baseline.cfg \
-  --system ../HBServe/configs/systems/sglang-small.cfg \
-  --model ../HBServe/examples/sglang/tiny-qwen3 \
+  --system ../ServeLoop/configs/systems/eight-stack-baseline.cfg \
+  --system ../ServeLoop/configs/systems/sglang-small.cfg \
+  --model ../ServeLoop/examples/sglang/tiny-qwen3 \
   --requests out/public-traces/qwen_traceA_blksz_16.jsonl \
   --trace-source-id qwen_bailian_trace_a --trace-start 8946 --trace-count 3 \
   --weight-tier hbm --kv-tier hbf --kv-cache-bytes 131072 \
@@ -206,7 +206,7 @@ Placement controls:
 Other options include chunked prefill, `--enable-mixed-chunk` for mixed
 prefill/decode batches, admission limits, page size, scheduler
 policy, radix disable, model/KV dtype and explicit target CPU overhead. Run
-`python -m hbserve.sglang run --help` for their names. A fresh output directory
+`python -m serveloop.sglang run --help` for their names. A fresh output directory
 is required for each execution.
 
 ## Clocks, output and evidence
@@ -247,8 +247,8 @@ time. Full contexts still feed the native traffic compiler without sampling.
 Run the focused physical checks from HBFSim:
 
 ```sh
-python ../HBServe/tests/test_sglang_backend.py --simulator build/hbfsim -v
-python ../HBServe/tests/test_sglang_requests.py -v
+python ../ServeLoop/tests/test_sglang_backend.py --simulator build/hbfsim -v
+python ../ServeLoop/tests/test_sglang_requests.py -v
 ```
 
 These checks cover shared prefix liveness, partial-page frees, dead dirty-byte

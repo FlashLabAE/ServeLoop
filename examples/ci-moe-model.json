@@ -1,6 +1,6 @@
 {
   "schema": {
-    "name": "hbserve.model",
+    "name": "serveloop.model",
     "version": 2
   },
   "model_id": "moe-ci",

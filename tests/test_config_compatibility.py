@@ -77,7 +77,7 @@ if __name__ == '__main__':
     sys.path[:0] = ([str(ROOT), str(HBFSIM)] if args.client == "bundled"
                     else [str(HBFSIM), str(ROOT)])
     import hbfsim_client
-    import hbserve
+    import serveloop
     assert Path(hbfsim_client.__file__).resolve().is_relative_to(ROOT if args.client == "bundled" else HBFSIM)
-    assert Path(hbserve.__file__).resolve().is_relative_to(ROOT)
+    assert Path(serveloop.__file__).resolve().is_relative_to(ROOT)
     unittest.main(argv=[__file__, *rest])

@@ -5,7 +5,7 @@ the serving population to the question a result is allowed to answer.
 
 ## Current fidelity layers
 
-HBServe currently provides:
+ServeLoop currently provides:
 
 - request-level arrivals, prompt/output lengths, model mix, and optional token
   IDs;
@@ -69,7 +69,7 @@ traffic.
 
 ## Acceptance gates for a trace backend
 
-A future HBServe trace backend should not be called hardware-faithful until it
+A future ServeLoop trace backend should not be called hardware-faithful until it
 passes all of these gates:
 
 - deterministic schema validation and stable trace digests;

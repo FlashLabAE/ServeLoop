@@ -1,6 +1,6 @@
 {
   "schema": {
-    "name": "hbserve.synthetic_requests",
+    "name": "serveloop.synthetic_requests",
     "version": 1
   },
   "request_count": 8,

@@ -1,6 +1,6 @@
 # Fixed memory windows
 
-`hbserve run` accepts exactly one workload source:
+`serveloop run` accepts exactly one workload source:
 
 | Input | Execution | Suitable metric |
 | --- | --- | --- |
@@ -32,10 +32,10 @@ arithmetically into full-scale predictions. Both use one implementation.
 From a clean source checkout:
 
 ```bash
-hbserve run --experiment configs/windows/miniquick-serving.json \
+serveloop run --experiment configs/windows/miniquick-serving.json \
   --preflight-only --out out/preflight
 
-hbserve run --experiment configs/windows/miniquick-serving.json \
+serveloop run --experiment configs/windows/miniquick-serving.json \
   --simulator /path/to/hbfsim --topologies all-hbm,4h4f --out out/miniquick
 ```
 
@@ -81,7 +81,7 @@ correctness check, not external validation. Paper claims still need target
 serving traces, calibration/holdout comparisons, and sensitivity to scheduling,
 locality, routing, and compute assumptions.
 
-Additional Python builders in `hbserve.windows` model bounded sliding KV,
+Additional Python builders in `serveloop.windows` model bounded sliding KV,
 staggered prefix populations, and preempt/resume traffic. These are controlled
 memory-demand generators, separate from the identity-aware
 [closed-loop prefix cache](prefix-caching.md). Paper-specific analysis runners and private measurement
@@ -132,7 +132,7 @@ Generate an independent training episode with a different locality seed and
 the same layout and placement granularity:
 
 ```sh
-python -m hbserve profile --experiment training.json --output training-profile.json
+python -m serveloop profile --experiment training.json --output training-profile.json
 ```
 
 Set `mapping.direct_placement.profile` to that profile path for `profiled_hotset`.

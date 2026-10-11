@@ -3,11 +3,11 @@ from dataclasses import replace
 from pathlib import Path
 import unittest
 
-from hbserve.catalog import load_model_any
-from hbserve.coarse_coverage import CoarseCoverageCompiler, CoarseCoverageProfile
-from hbserve.compiler import HBServeCompiler
-from hbserve.contracts import BatchSlice, ScheduledBatch, HBServeError, RooflineTimingProvider
-from hbserve.io import load_request_trace
+from serveloop.catalog import load_model_any
+from serveloop.coarse_coverage import CoarseCoverageCompiler, CoarseCoverageProfile
+from serveloop.compiler import ServeLoopCompiler
+from serveloop.contracts import BatchSlice, ScheduledBatch, ServeLoopError, RooflineTimingProvider
+from serveloop.io import load_request_trace
 
 DATA = Path(__file__).resolve().parents[1] / 'examples/coarse-coverage'
 
@@ -27,32 +27,32 @@ class CoarseCoverageTests(unittest.TestCase):
             (BatchSlice('observed-request',context,tokens,context,True,phase),),0.)
 
     def test_unsupported_shapes_and_model_are_rejected(self):
-        with self.assertRaisesRegex(HBServeError,'outside'):
+        with self.assertRaisesRegex(ServeLoopError,'outside'):
             self.compiler().compile(self.batch(tokens=15))
-        with self.assertRaisesRegex(HBServeError,'outside'):
+        with self.assertRaisesRegex(ServeLoopError,'outside'):
             self.compiler().compile(self.batch('decode',1,17))
         other=replace(self.model,provenance={**self.model.provenance,'source':'different model binding'})
-        with self.assertRaisesRegex(HBServeError,'model does not match'):
+        with self.assertRaisesRegex(ServeLoopError,'model does not match'):
             CoarseCoverageCompiler(models={other.model_id:other},request_trace=self.trace,
                 coverage_profile=self.profile)
         different_trace=replace(self.trace,requests=(replace(self.trace.requests[0],arrival_ns=1.),))
-        with self.assertRaisesRegex(HBServeError,'request trace does not match'):
+        with self.assertRaisesRegex(ServeLoopError,'request trace does not match'):
             CoarseCoverageCompiler(models={self.model.model_id:self.model},request_trace=different_trace,
                 coverage_profile=self.profile)
 
     def test_compute_calibration_cannot_silently_enter_memory_profile(self):
-        with self.assertRaisesRegex(HBServeError,'memory_only'):
+        with self.assertRaisesRegex(ServeLoopError,'memory_only'):
             self.compiler(timing=RooflineTimingProvider(peak_tflops=100,efficiency=.5))
 
     def test_profiles_cannot_escape_reserved_storage(self):
         for offset,size in [(-1,32),(self.profile.workspace_bytes,32),(0,0),(0,True)]:
             doc=deepcopy(self.profile.document)
             doc['phases']['prefill']['embedding'][0]['stages'][0]['ranges'][0][2:]=[offset,size]
-            with self.assertRaises(HBServeError):CoarseCoverageProfile(doc)
+            with self.assertRaises(ServeLoopError):CoarseCoverageProfile(doc)
 
     def test_decode_current_kv_and_ideal_bound_keep_persistent_traffic(self):
         batch=self.batch('decode',1,16)
-        original=HBServeCompiler(models={self.model.model_id:self.model},request_trace=self.trace).compile(batch)
+        original=ServeLoopCompiler(models={self.model.model_id:self.model},request_trace=self.trace).compile(batch)
         coverage=self.compiler().compile(batch)
         ideal=self.compiler(cache_bound='ideal-temporaries').compile(batch)
         def persistent(result):

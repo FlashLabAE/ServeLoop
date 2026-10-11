@@ -1,19 +1,19 @@
-# HBServe
+# ServeLoop
 
-HBServe is an evidence-aware workload compiler for studying the memory side of
+ServeLoop is an evidence-aware workload compiler for studying the memory side of
 LLM serving. It turns model descriptors and request streams into continuous-
 batching iterations, paged-KV lifecycle events, and byte-exact memory
 transactions. A compatible HBFSim executable can then close the loop with
 physical memory completion times.
 
-The default entry point is `hbserve run` (or `python -m hbserve run`). It uses
-HBServe's own scheduler, workload compiler and placement to send transaction
+The default entry point is `serveloop run` (or `python -m serveloop run`). It uses
+ServeLoop's own scheduler, workload compiler and placement to send transaction
 batches to HBFSim. It does not import or launch SGLang or PyTorch.
 The same command accepts fixed memory-window experiments with `--experiment`.
 Miniquick and full-scale use the same generator, model ledger, and remappers;
 their model, population, and system profiles differ, not their implementation.
 
-HBServe is a workload simulator frontend, not an inference engine. Its primary
+ServeLoop is a workload simulator frontend, not an inference engine. Its primary
 goal is to make every realism claim inspectable: synthetic inputs stay labeled
 synthetic, source artifacts are hashed, model bytes are derived by explicit
 formulas, and each result carries a machine-readable capability boundary.
@@ -41,10 +41,10 @@ formulas, and each result carries a machine-readable capability boundary.
 - Matched fixed-window topology comparisons: prefill growth, decode-only, and
   source-anchored mixed windows, with no compute timing or request feedback.
 
-HBServe currently models one device and no collective/network timing. It does
+ServeLoop currently models one device and no collective/network timing. It does
 not claim kernel-level cache behavior or hardware-calibrated end-to-end latency
 unless those are supplied and validated by a future trace/calibration backend.
-Run `hbserve capabilities` to inspect the exact current boundary.
+Run `serveloop capabilities` to inspect the exact current boundary.
 
 ## Optional enhanced coarse inputs
 
@@ -56,14 +56,14 @@ approximations, not hardware-calibrated GPU cache or inference timing.
 
 ## Install
 
-HBServe requires Python 3.10 or newer and has no runtime Python dependencies.
+ServeLoop requires Python 3.10 or newer and has no runtime Python dependencies.
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install -e .
-hbserve --version
-hbserve capabilities
+serveloop --version
+serveloop capabilities
 ```
 
 ## Quick start
@@ -72,10 +72,10 @@ Model conversion and request generation work without HBFSim:
 
 ```bash
 mkdir -p out
-hbserve model models/llama31-8b-w8-kv-bf16.json \
+serveloop model models/llama31-8b-w8-kv-bf16.json \
   --output out/llama31-8b.json
 
-hbserve generate \
+serveloop generate \
   --config examples/quickstart-requests.json \
   --output out/requests.json
 ```
@@ -83,7 +83,7 @@ hbserve generate \
 Physical execution requires a separately built compatible `hbfsim` binary:
 
 ```bash
-hbserve run \
+serveloop run \
   --simulator /path/to/HBFSim/build/hbfsim \
   --model models/llama31-8b-w8-kv-bf16.json \
   --system configs/4hbm-4hbf-miniquick.cfg \
@@ -100,7 +100,7 @@ headline. Existing results are never overwritten.
 Generate a miniquick window and validate its topology matrix without a simulator:
 
 ```bash
-hbserve run --experiment configs/windows/miniquick-serving.json \
+serveloop run --experiment configs/windows/miniquick-serving.json \
   --preflight-only --out out/window-check
 ```
 
@@ -117,8 +117,8 @@ reuse inputs, and the volatile-cache boundary.
 
 The separate [native SGLang frontend](docs/sglang.md) is retained for studies
 that need SGLang's scheduler, RadixCache and token allocator. Select it
-explicitly with `python -m hbserve.sglang`; it has separate dependencies and
-is never selected by `hbserve run`.
+explicitly with `python -m serveloop.sglang`; it has separate dependencies and
+is never selected by `serveloop run`.
 Its input accepts token JSONL, canonical production-trace bundles, or pinned
 Bailian/Mooncake files with `--trace-source-id`.
 
@@ -128,15 +128,15 @@ physical execution with a faster timing model.
 
 ## Recovery scope
 
-The `hbserve.recovery` API is used by HBFSim's Q5 bounded resident-KV controls
-in `studies/hbf_persistence/hbserve_recovery.py`. It models committed-boundary
+The `serveloop.recovery` API is used by HBFSim's Q5 bounded resident-KV controls
+in `studies/hbf_persistence/serveloop_recovery.py`. It models committed-boundary
 HBF media and KV recovery, not scheduler resume or persistent prefix caching.
-HBServe tests its integrity and payload-accounting helpers without a simulator;
+ServeLoop tests its integrity and payload-accounting helpers without a simulator;
 HBFSim's separate recovery tests execute small native sessions.
 
 ## Why the workload is credible
 
-HBServe separates four questions that benchmarks often conflate:
+ServeLoop separates four questions that benchmarks often conflate:
 
 1. **Input realism:** request arrivals, prompt/output lengths, token IDs, and
    MoE routes are either source-qualified traces or explicitly synthetic.
@@ -154,8 +154,8 @@ a serving profiler to cache-line address/arrival traces, and
 
 ## Repository layout
 
-- `hbserve/`: request semantics, scheduler, compiler, placement, and CLI.
-- `hbserve/windows/`: deterministic fixed-population windows and address remapping.
+- `serveloop/`: request semantics, scheduler, compiler, placement, and CLI.
+- `serveloop/windows/`: deterministic fixed-population windows and address remapping.
 - `hbfsim_client/`: the minimal persistent-session protocol used by the HBFSim
   backend.
 - `models/`: public, source-attributed architecture descriptors.
@@ -168,11 +168,11 @@ a serving profiler to cache-line address/arrival traces, and
 ## Test
 
 ```bash
-python3 -B tests/test_hbserve.py
+python3 -B tests/test_serveloop.py
 python3 -B tests/test_windows.py
 python3 -B tests/test_session_compatibility.py
 python3 -B tests/test_recovery.py
-python3 -B tests/test_hbserve.py --simulator /path/to/HBFSim/build/hbfsim
+python3 -B tests/test_serveloop.py --simulator /path/to/HBFSim/build/hbfsim
 python3 -B tests/test_windows.py --simulator /path/to/HBFSim/build/hbfsim
 ```
 
@@ -182,7 +182,7 @@ the tests do not execute the full miniquick or full-scale physical matrix.
 
 ## Maturity and license
 
-HBServe is alpha software. Schemas are versioned, but compatibility is not yet
+ServeLoop is alpha software. Schemas are versioned, but compatibility is not yet
 promised. The project is available under the [MIT License](LICENSE).
 
 System profiles and the bundled client target HBFSim `60e3f66` and its OCP model. See

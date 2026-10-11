@@ -1,6 +1,6 @@
 # Closed-loop prefix caching
 
-Prefix caching is opt-in: set `--prefix-cache-bytes N` on `hbserve run --requests`
+Prefix caching is opt-in: set `--prefix-cache-bytes N` on `serveloop run --requests`
 or use `prefix_cache_bytes` in a placement JSON. Optional
 `--prefix-cache-ttl-ns N` expires entries after the stated time from publication.
 The budget is a maximum within the shared HBM KV pool, not extra HBM or a

@@ -1,6 +1,6 @@
 {
   "schema": {
-    "name": "hbserve.synthetic_router",
+    "name": "serveloop.synthetic_router",
     "version": 1
   },
   "seed": 11,

@@ -2,11 +2,11 @@ from dataclasses import replace
 from pathlib import Path
 import unittest
 
-from hbserve.catalog import load_model_any
-from hbserve.coarse_analytic import AnalyticCoverageCompiler, build_profile
-from hbserve.coarse_coverage import CoarseCoverageCompiler, CoarseCoverageProfile
-from hbserve.contracts import BatchSlice, ScheduledBatch, HBServeError
-from hbserve.io import load_request_trace
+from serveloop.catalog import load_model_any
+from serveloop.coarse_analytic import AnalyticCoverageCompiler, build_profile
+from serveloop.coarse_coverage import CoarseCoverageCompiler, CoarseCoverageProfile
+from serveloop.contracts import BatchSlice, ScheduledBatch, ServeLoopError
+from serveloop.io import load_request_trace
 
 DATA=Path(__file__).resolve().parents[1]/'examples/coarse-coverage'
 
@@ -56,11 +56,11 @@ class AnalyticTests(unittest.TestCase):
         profile=CoarseCoverageProfile.load(DATA/'qwen2.5-1.5b-sglang-bf16-p16-d1.json')
         captured=CoarseCoverageCompiler(models={self.model.model_id:self.model},
             request_trace=self.trace,coverage_profile=profile)
-        with self.assertRaises(HBServeError):captured.compile(self.batch(tokens=128))
-        with self.assertRaises(HBServeError):self.compiler().compile(self.batch('unsupported'))
-        with self.assertRaises(HBServeError):self.compiler().compile(self.batch('decode',2,16))
+        with self.assertRaises(ServeLoopError):captured.compile(self.batch(tokens=128))
+        with self.assertRaises(ServeLoopError):self.compiler().compile(self.batch('unsupported'))
+        with self.assertRaises(ServeLoopError):self.compiler().compile(self.batch('decode',2,16))
         other=replace(self.model,final_norm_bytes=6144)
-        with self.assertRaises(HBServeError):AnalyticCoverageCompiler(
+        with self.assertRaises(ServeLoopError):AnalyticCoverageCompiler(
             models={other.model_id:other},request_trace=self.trace)
 
     def test_ideal_bound_preserves_persistent_traffic(self):

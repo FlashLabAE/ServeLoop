@@ -1,5 +1,5 @@
 {
-  "schema": {"name": "hbserve.public_model", "version": 1},
+  "schema": {"name": "serveloop.public_model", "version": 1},
   "intended_use": {
     "role": "miniquick_dense_memory_descriptor",
     "paper_claim_eligible_by_itself": false,

@@ -1,6 +1,6 @@
 # Operator coverage for the fast coarse path
 
-`hbserve run --coarse-coverage-profile FILE` adds activation/control/scratch
+`serveloop run --coarse-coverage-profile FILE` adds activation/control/scratch
 coverage to the original weight/KV compiler. The original path remains the
 default when the option is absent. GPU compute calibration is not required;
 the current coverage interface requires `--timing memory_only`.
@@ -15,7 +15,7 @@ reusable profile interface, not a general model/shape generator.
 From the ServeLoop checkout, after `python -m pip install -e .`, use a fresh output directory:
 
 ```sh
-python -m hbserve run \
+python -m serveloop run \
   --model examples/coarse-coverage/model.json \
   --requests examples/coarse-coverage/requests.json \
   --system /path/to/system.cfg --simulator /path/to/hbfsim \
@@ -26,7 +26,7 @@ python -m hbserve run \
 
 Use `--placement all-hbm` for the other qualified placement. No experimental
 environment overrides are required. A standalone installation uses the same
-arguments with `python -m hbserve run`. The HBFSim binary/configuration are
+arguments with `python -m serveloop run`. The HBFSim binary/configuration are
 explicit inputs; the profile does not pick a historical backend automatically.
 
 ## Meaning and boundaries
@@ -73,7 +73,7 @@ Runtime profiles require no observation/template binaries. An offline export
 from a qualified ledger is available separately:
 
 ```sh
-python -m hbserve.coarse_coverage_export \
+python -m serveloop.coarse_coverage_export \
   --ledger /path/to/qualified-ledger.json \
   --model examples/coarse-coverage/model.json \
   --requests examples/coarse-coverage/requests.json \
@@ -93,7 +93,7 @@ Use `--coarse-coverage-policy dense-16bit-swiglu` instead of
 ledger and request shapes. The two options are mutually exclusive. Example:
 
 ```sh
-python -m hbserve run \
+python -m serveloop run \
   --model examples/coarse-coverage/model.json \
   --requests /path/to/requests.json --system /path/to/system.cfg \
   --simulator /path/to/hbfsim --placement weights-hbf-kv-hbm \
@@ -107,7 +107,7 @@ sizes, query/KV head counts, head dimension, BF16/FP16 dtype, matching KV dtype,
 rotary dimension, RoPE-table dtype, SwiGLU/RMSNorm and optional Q/K head norms.
 Layer count and tied embeddings remain in the model ledger. No weight-byte
 reverse inference is used for structured models; incompatible weight/KV
-payloads are rejected. Structure is optional in hbserve.model v2: old JSON
+payloads are rejected. Structure is optional in serveloop.model v2: old JSON
 canonical contents/digests are unchanged. Adding structure deliberately changes
 the model digest, so a captured profile bound to old JSON must still use its
 original model. Older strict clients cannot read the new optional field.
@@ -116,7 +116,7 @@ Import a supported dense Llama/Qwen/Mistral Hugging Face config without loading
 weights or executing the model:
 
 ```sh
-python -m hbserve model /path/to/config.json --hf-config \
+python -m serveloop model /path/to/config.json --hf-config \
   --dtype bfloat16 --output /path/to/model.json
 ```
 
@@ -229,7 +229,7 @@ accesses, plus low-rank query/KV and compressed-context MLA accesses.
 For a public descriptor use the same run command, replacing the policy value:
 
 ```sh
-python -m hbserve run --model models/deepseek-v3-fp8-kv-bf16.json \
+python -m serveloop run --model models/deepseek-v3-fp8-kv-bf16.json \
   --requests /path/to/requests.json --router examples/ci-synthetic-router.json \
   --system /path/to/system.cfg --simulator /path/to/hbfsim \
   --placement weights-hbf-kv-hbm --timing memory_only --prefetch-depth 1 \
@@ -245,7 +245,7 @@ an arbitrary system configuration.
 To convert a public descriptor into portable native JSON with coverage geometry:
 
 ```sh
-python -m hbserve model models/llama31-8b-w8-kv-bf16.json \
+python -m serveloop model models/llama31-8b-w8-kv-bf16.json \
   --coverage-descriptor --output /path/to/model.json
 ```
 
@@ -272,7 +272,7 @@ Both `dense-16bit-swiglu` (including its compatibility alias) and `model-derived
 now accept `--timing roofline` as well as `memory_only`. For example:
 
 ```sh
-python -m hbserve run --model models/llama31-8b-w8-kv-bf16.json \
+python -m serveloop run --model models/llama31-8b-w8-kv-bf16.json \
   --requests /path/to/requests.json --system /path/to/system.cfg \
   --simulator /path/to/hbfsim --placement all-hbm --prefetch-depth 1 \
   --coarse-coverage-policy model-derived \

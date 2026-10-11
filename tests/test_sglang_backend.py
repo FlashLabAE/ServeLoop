@@ -7,9 +7,9 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from hbserve.sglang.backend import HardwareSession, interval_bytes
-from hbserve.sglang.model import NativeCompiler, NativeRequest, dense_model
-from hbserve.contracts import RooflineTimingProvider
+from serveloop.sglang.backend import HardwareSession, interval_bytes
+from serveloop.sglang.model import NativeCompiler, NativeRequest, dense_model
+from serveloop.contracts import RooflineTimingProvider
 
 ROOT = Path(__file__).resolve().parents[1]
 HBFSIM = ROOT.parent / "HBFSim"

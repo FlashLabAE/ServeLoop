@@ -4,11 +4,11 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from hbserve.catalog import convert_descriptor, main as convert_main
-from hbserve.coarse_analytic import AnalyticCoverageCompiler, build_profile
-from hbserve.contracts import DenseModelStructure, ModelSpec, HBServeError
-from hbserve.io import load_request_trace
-from hbserve.sglang.model import dense_model
+from serveloop.catalog import convert_descriptor, main as convert_main
+from serveloop.coarse_analytic import AnalyticCoverageCompiler, build_profile
+from serveloop.contracts import DenseModelStructure, ModelSpec, ServeLoopError
+from serveloop.io import load_request_trace
+from serveloop.sglang.model import dense_model
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -21,7 +21,7 @@ def config(h=3584,f=18944,q=28,k=4,d=128,n=28):
 
 class StructureTests(unittest.TestCase):
     def test_legacy_canonical_digest_and_structure_roundtrip(self):
-        from hbserve.catalog import load_model_any
+        from serveloop.catalog import load_model_any
         model=load_model_any(ROOT/'examples/coarse-coverage/model.json')
         self.assertNotIn('structure',model.canonical())
         self.assertEqual(model.digest,ModelSpec.from_dict(model.canonical()).digest)
@@ -55,9 +55,9 @@ class StructureTests(unittest.TestCase):
         g=dense_model(config(),'bfloat16','bfloat16',include_structure=True).structure
         for change in (dict(dtype='float32'),dict(kv_dtype='float16'),dict(num_key_value_heads=3),
                        dict(rotary_dim=129),dict(mlp='gelu'),dict(hidden_size=True)):
-            with self.assertRaises(HBServeError):replace(g,**change)
+            with self.assertRaises(ServeLoopError):replace(g,**change)
         model=dense_model(config(),'bfloat16','bfloat16',include_structure=True)
-        with self.assertRaises(HBServeError):replace(model,structure=replace(g,num_key_value_heads=7))
+        with self.assertRaises(ServeLoopError):replace(model,structure=replace(g,num_key_value_heads=7))
         hf=config();hf['num_experts']=4
         with self.assertRaises(ValueError):dense_model(hf,'bfloat16','bfloat16',include_structure=True)
 

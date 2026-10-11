@@ -18,15 +18,15 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from hbserve.__main__ import main
-from hbserve.contracts import HBServeError
-from hbserve.io import create_run_directory, load_json_object, write_json_atomic
-from hbserve.public_model import (
+from serveloop.__main__ import main
+from serveloop.contracts import ServeLoopError
+from serveloop.io import create_run_directory, load_json_object, write_json_atomic
+from serveloop.public_model import (
     PublicModelDescriptorError,
     derive_public_model_capacity_inputs,
     derive_public_model_ledger,
 )
-from hbserve.windows.experiment import load_experiment_context
+from serveloop.windows.experiment import load_experiment_context
 
 
 def logical_trace_digest(trace) -> str:
@@ -169,7 +169,7 @@ class WindowTests(unittest.TestCase):
             self.assertNotEqual(first, second)
             destination = first / "result.json"
             write_json_atomic(destination, {"run": 1})
-            with self.assertRaises(HBServeError):
+            with self.assertRaises(ServeLoopError):
                 write_json_atomic(destination, {"run": 2})
             self.assertEqual(load_json_object(destination, "result"), {"run": 1})
 
@@ -210,7 +210,7 @@ class PhysicalWindowTests(unittest.TestCase):
             for row in rows:
                 self.assertEqual(row["trace_sha256"], result["trace"]["trace_sha256"])
                 self.assertGreater(row["metrics"]["final_drain_time_ns"], 0)
-            self.assertNotIn("hbserve", result)
+            self.assertNotIn("serveloop", result)
 
 
 if __name__ == "__main__":

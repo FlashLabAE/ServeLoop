@@ -2,13 +2,13 @@ from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
 import unittest
-from hbserve.catalog import load_model_any
-from hbserve.coarse_catalog import CatalogCoverageCompiler, build_profile
-from hbserve.coarse_analytic import build_profile as dense_profile
-from hbserve.coarse_l2 import CoarseL2Compiler
-from hbserve.compiler import HBServeCompiler
-from hbserve.contracts import (BatchSlice,ScheduledBatch,ModelSpec,RequestSpec,RequestTrace,TraceProvenance,HBServeError)
-from hbserve.synthetic import HotsetZipfRouter
+from serveloop.catalog import load_model_any
+from serveloop.coarse_catalog import CatalogCoverageCompiler, build_profile
+from serveloop.coarse_analytic import build_profile as dense_profile
+from serveloop.coarse_l2 import CoarseL2Compiler
+from serveloop.compiler import ServeLoopCompiler
+from serveloop.contracts import (BatchSlice,ScheduledBatch,ModelSpec,RequestSpec,RequestTrace,TraceProvenance,ServeLoopError)
+from serveloop.synthetic import HotsetZipfRouter
 ROOT=Path(__file__).resolve().parents[1]
 def setup(path,prompt=16):
     old=load_model_any(path);m=load_model_any(path,include_coverage_descriptor=True)
@@ -26,7 +26,7 @@ class CatalogCoverageTests(unittest.TestCase):
                 self.assertNotIn('coverage_descriptor',old.canonical())
                 self.assertEqual(old.memory_objects,m.memory_objects);self.assertEqual(old.layers,m.layers)
                 self.assertEqual(m.digest,ModelSpec.from_dict(m.canonical()).digest)
-                plain=HBServeCompiler(**{**kw,"models":{old.model_id:old}});enhanced=CatalogCoverageCompiler(**kw)
+                plain=ServeLoopCompiler(**{**kw,"models":{old.model_id:old}});enhanced=CatalogCoverageCompiler(**kw)
                 for batch in bs:
                     a=plain.compile(batch);b=enhanced.compile(batch)
                     weights=lambda c:[(o.op,o.object_id,o.offset,o.bytes) for o in c.memory_operations if o.object_id.startswith('model/')]
@@ -68,6 +68,6 @@ class CatalogCoverageTests(unittest.TestCase):
     def test_mismatch_missing_geometry_and_shape_rejected(self):
         old,m,kw,bs=setup(ROOT/'models/llama31-8b-w8-kv-bf16.json')
         corrupt=deepcopy(m.coverage_descriptor);corrupt['architecture']['hidden_size']+=128
-        with self.assertRaises(HBServeError):replace(m,coverage_descriptor=corrupt)
-        with self.assertRaisesRegex(HBServeError,'public descriptor'):build_profile(old,kw['request_trace'].digest,'prefill',16,0)
-        with self.assertRaises(HBServeError):build_profile(m,kw['request_trace'].digest,'decode',2,16)
+        with self.assertRaises(ServeLoopError):replace(m,coverage_descriptor=corrupt)
+        with self.assertRaisesRegex(ServeLoopError,'public descriptor'):build_profile(old,kw['request_trace'].digest,'prefill',16,0)
+        with self.assertRaises(ServeLoopError):build_profile(m,kw['request_trace'].digest,'decode',2,16)

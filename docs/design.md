@@ -1,12 +1,12 @@
-# HBServe design
+# ServeLoop design
 
 Status: experimental; schema compatibility is not yet promised.
 
-HBServe has one workload CLI with two explicit execution modes. The closed-loop
+ServeLoop has one workload CLI with two explicit execution modes. The closed-loop
 serving path is:
 
 ```text
-hbserve.public_model or hbserve.model
+serveloop.public_model or serveloop.model
         +
 request trace or labeled synthetic request specification
         │
@@ -44,9 +44,9 @@ Unknown or inconsistent data fails before physical execution.
 
 ### Models
 
-`hbserve.public_model` v1 contains source-attributed architecture dimensions
-and an explicit precision profile. `hbserve model` derives the canonical
-`hbserve.model` v2 ledger:
+`serveloop.public_model` v1 contains source-attributed architecture dimensions
+and an explicit precision profile. `serveloop model` derives the canonical
+`serveloop.model` v2 ledger:
 
 - embedding, final norm, and LM-head bytes;
 - attention, dense FFN, router, shared-expert, and routed-expert objects for
@@ -64,7 +64,7 @@ Precision supports unquantized matrices, blockwise 128x128 scales, and symmetric
 per-output-channel scales. Embeddings default to non-matrix precision; the 70B
 miniquick descriptor explicitly selects matrix precision including row scales.
 
-HBServe represents one memory domain. Tensor, pipeline, and expert parallelism
+ServeLoop represents one memory domain. Tensor, pipeline, and expert parallelism
 must therefore use a descriptor for the local shard. Collective traffic and
 network timing are not inferred.
 
@@ -81,13 +81,13 @@ For prompt length `P` and output length `O`, the model processes `P + O - 1`
 input tokens. The final prefill chunk emits the first output token; each of the
 remaining decode iterations consumes the previous token and emits the next.
 
-Token IDs select embedding rows when provided. Otherwise HBServe uses a stable
+Token IDs select embedding rows when provided. Otherwise ServeLoop uses a stable
 SHA-256 surrogate and marks the result so it cannot be used as locality
 evidence.
 
-For MoE, `hbserve.router_trace` supplies one unique expert set per processed
+For MoE, `serveloop.router_trace` supplies one unique expert set per processed
 token and MoE layer. Coverage, bounds, and `top_k` are checked. The alternative
-`hbserve.synthetic_router` hot-set/Zipf generator is deterministic sensitivity
+`serveloop.synthetic_router` hot-set/Zipf generator is deterministic sensitivity
 input, not measured routing.
 
 ### Scheduler and KV
@@ -141,7 +141,7 @@ fed back to the scheduler; background migrations may remain outside that
 frontier but retain explicit dependencies. Finalization drains outstanding
 work and emits the physical measurement receipt.
 
-`--simulator` is mandatory. HBServe never guesses a binary inside its own
+`--simulator` is mandatory. ServeLoop never guesses a binary inside its own
 installation.
 
 ## Reproducibility and claim eligibility
@@ -160,15 +160,15 @@ holdout-validation requirements.
 ## Commands
 
 ```bash
-hbserve capabilities
+serveloop capabilities
 
-hbserve model models/llama31-8b-w8-kv-bf16.json \
+serveloop model models/llama31-8b-w8-kv-bf16.json \
   --output out/llama31-8b.json
 
-hbserve generate --config examples/quickstart-requests.json \
+serveloop generate --config examples/quickstart-requests.json \
   --output out/requests.json
 
-hbserve run \
+serveloop run \
   --simulator /path/to/HBFSim/build/hbfsim \
   --model models/llama31-8b-w8-kv-bf16.json \
   --system configs/4hbm-4hbf-miniquick.cfg \
@@ -179,7 +179,7 @@ hbserve run \
 
 `run` accepts repeatable models and system overlays, an optional MoE router,
 an explicit placement JSON or checked-in preset, and an optional
-`hbserve.run_config` v2 file. Each invocation creates a fresh timestamped
+`serveloop.run_config` v2 file. Each invocation creates a fresh timestamped
 output directory and never overwrites an earlier run.
 
 ## Verification
@@ -192,7 +192,7 @@ arrival admission, chunked-prefill emission, token budgets, and timing claim
 selection.
 
 ```bash
-python3 -B tests/test_hbserve.py
+python3 -B tests/test_serveloop.py
 ```
 
 With a compatible simulator, the physical suite additionally covers detached
@@ -200,5 +200,5 @@ migration dependencies, the checked-in CLI example, and simultaneous HBF plus
 external-memory execution:
 
 ```bash
-python3 -B tests/test_hbserve.py --simulator /path/to/hbfsim
+python3 -B tests/test_serveloop.py --simulator /path/to/hbfsim
 ```

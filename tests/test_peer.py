@@ -12,8 +12,8 @@ sys.path.insert(0, str(ROOT))
 
 from hbfsim_client.simulation_session import ResolvedSystemConfig, SimulationSession
 from hbfsim_client.transaction_protocol import HbfGeometry, TransactionProtocolError
-from hbserve.windows.memory_trace import CanonicalTraceBatch, LogicalTransaction, MemoryLayout, MemoryRegion
-from hbserve.windows.peer import PeerCapacityError, PeerKvMigrationRemapper
+from serveloop.windows.memory_trace import CanonicalTraceBatch, LogicalTransaction, MemoryLayout, MemoryRegion
+from serveloop.windows.peer import PeerCapacityError, PeerKvMigrationRemapper
 
 
 def layout():

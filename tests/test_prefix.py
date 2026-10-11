@@ -9,11 +9,11 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from test_hbserve import _dense, _moe, _engine, _pool_spec, _spec, _trace, PlacementExecutor
-from hbserve.contracts import (HBServeError, RequestSpec, SchedulerPolicy, RouterTrace,
+from test_serveloop import _dense, _moe, _engine, _pool_spec, _spec, _trace, PlacementExecutor
+from serveloop.contracts import (ServeLoopError, RequestSpec, SchedulerPolicy, RouterTrace,
                               RouterDecision, TraceProvenance, canonical_sha256)
-from hbserve.placement import HBServePlacement
-from hbserve.prefix import block_keys
+from serveloop.placement import ServeLoopPlacement
+from serveloop.prefix import block_keys
 
 
 class PrefixTests(unittest.TestCase):
@@ -22,8 +22,8 @@ class PrefixTests(unittest.TestCase):
     def test_moe_token_identity_alone_cannot_grant_prefix_hits(self):
         model = _moe()
         models = {model.model_id: model}
-        with self.assertRaisesRegex(HBServeError, "routing identity"):
-            HBServePlacement(models=models, spec=replace(_spec(models), prefix_cache_bytes=65536))
+        with self.assertRaisesRegex(ServeLoopError, "routing identity"):
+            ServeLoopPlacement(models=models, spec=replace(_spec(models), prefix_cache_bytes=65536))
 
     def test_moe_prefix_reuse_is_bound_to_routes_and_compiler_identity(self):
         class RecordedPrefixRouter(RouterTrace):
@@ -45,22 +45,22 @@ class PrefixTests(unittest.TestCase):
             tuple(RouterDecision(request.request_id, token, 0, (0, 2) if request.request_id == 'c' else (0, 1))
                   for request in requests for token in range(34)))
         spec = replace(_pool_spec(model, 40), prefix_cache_bytes=65536)
-        placement = HBServePlacement(models=models, spec=spec, router=router)
+        placement = ServeLoopPlacement(models=models, spec=spec, router=router)
         executor = PlacementExecutor(placement, latency_ns=10)
         policy = SchedulerPolicy(max_batch_requests=1, max_batch_tokens=16, prefill_chunk_tokens=16)
         result = _engine(models, _trace(*requests), executor, policy, router=router).run()
         self.assertEqual([r['prefix_hit_tokens'] for r in result['requests']], [0, 32, 0])
         self.assertEqual(placement.receipt()['prefix_router_sha256'], router.digest)
         changed = replace(router, provenance=TraceProvenance(kind='ci_fixture', source='different binding'))
-        placement = HBServePlacement(models=models, spec=spec, router=router)
-        with self.assertRaisesRegex(HBServeError, 'differs from the prefix-cache router'):
+        placement = ServeLoopPlacement(models=models, spec=spec, router=router)
+        with self.assertRaisesRegex(ServeLoopError, 'differs from the prefix-cache router'):
             _engine(models, _trace(*requests), PlacementExecutor(placement, latency_ns=10), policy, router=changed).run()
 
     def simulate(self, requests, *, pool_blocks=40, cache_bytes=65536, ttl_ns=None, batch_tokens=16):
         model = _dense()
         spec = replace(_pool_spec(model, pool_blocks), prefix_cache_bytes=cache_bytes,
                        prefix_cache_ttl_ns=ttl_ns)
-        placement = HBServePlacement(models={model.model_id: model}, spec=spec)
+        placement = ServeLoopPlacement(models={model.model_id: model}, spec=spec)
         executor = PlacementExecutor(placement, latency_ns=10.0)
         result = _engine({model.model_id: model}, _trace(*requests), executor,
                          SchedulerPolicy(max_batch_requests=4, max_batch_tokens=batch_tokens,
@@ -128,15 +128,15 @@ class PrefixTests(unittest.TestCase):
     def test_real_simulator_feedback_reuses_only_committed_blocks(self):
         if self.simulator is None:
             self.skipTest("no simulator supplied")
-        from hbserve.contracts import RooflineTimingProvider
-        from hbserve.hbfsim import HbfSimExecutor
+        from serveloop.contracts import RooflineTimingProvider
+        from serveloop.hbfsim import HbfSimExecutor
 
         model = _dense()
         models = {model.model_id: model}
         trace = _trace(self.request("first", 0), self.request("reuse", 1e9))
         observations = []
         for capacity in (0, 65536):
-            placement = HBServePlacement(models=models, spec=replace(_spec(models), prefix_cache_bytes=capacity))
+            placement = ServeLoopPlacement(models=models, spec=replace(_spec(models), prefix_cache_bytes=capacity))
             executor = HbfSimExecutor(simulator_path=self.simulator,
                                      system_config_paths=(ROOT / "configs/4hbm-4hbf.cfg",), placement=placement)
             try:
@@ -152,7 +152,7 @@ class PrefixTests(unittest.TestCase):
         self.assertLess(observations[1]["requests"][1]["ttft_ns"], observations[0]["requests"][1]["ttft_ns"])
 
     def test_generator_reuse_does_not_change_arrivals_or_work_sizes(self):
-        from hbserve.synthetic import SyntheticRequestConfig, generate_requests
+        from serveloop.synthetic import SyntheticRequestConfig, generate_requests
 
         config = SyntheticRequestConfig(4, 10, 65, 0, 2, 0, {"dense": 1}, 37,
                                         shared_prefix_tokens=64)

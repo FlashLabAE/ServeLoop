@@ -67,7 +67,7 @@ Current compatibility target: HBFSim **60e3f6669c49a7e8c0a0bd299955de2527ec6a70*
 The profiles were sourced from **2a59b7f13461356d33c00ad1f25fdee4e0bf7fb1**;
 their recorded source values are unchanged at the current target. The original
 profile source hashes and migration inventory remain intact.
-The HBServe base revision **3a6b9a5** shipped older vendor-target profiles that
+The ServeLoop base revision **3a6b9a5** shipped older vendor-target profiles that
 fail with this backend. This change adopts the corresponding HBFSim OCP v0.7.0
 Grade 2 profiles, rather than attempting to reproduce the obsolete model.
 `configs/ocp-profile-source.json` records source hashes and **every changed,
@@ -101,7 +101,7 @@ HBM contract; this migration does not restore a private controller DRAM model.
 
 | Pair / entry | Startup status | Physical equivalence |
 | --- | --- | --- |
-| HBServe 3a6b9a5 original profiles + HBFSim 60e3f66 | Rejected (obsolete keys) | No |
+| ServeLoop 3a6b9a5 original profiles + HBFSim 60e3f66 | Rejected (obsolete keys) | No |
 | Migrated profiles + updated bundled or target external client + HBFSim 60e3f66 | Bounded config/session tests pass | Not equivalent to original profiles |
 | Migrated profiles + bundled client from 6f5a94e + HBFSim 60e3f66 | New transaction census, tier accounting and wear-v2 receipts rejected | Previous protocol fix needs this update |
 | Migrated profiles + historical HBFSim versions | Not certified; pin matching source/configs | Not assumed |
@@ -109,7 +109,7 @@ HBM contract; this migration does not restore a private controller DRAM model.
 | Zero-HBM `0h8f` execution | Still unsupported by controller-HBM contract | Not repaired by this change |
 
 Flat serving profiles and `systems/` profiles now select identical values for
-matching shapes. SGLang examples explicitly select HBServe's `systems/` base
+matching shapes. SGLang examples explicitly select ServeLoop's `systems/` base
 and `sglang-small.cfg` overlay; commands in `docs/sglang.md` run from HBFSim.
 The native coarse path remains the default. No simulator or serving algorithm
 is changed. The bundled Python simulation-session client is updated to the
@@ -118,8 +118,8 @@ selected backend contract: scalar read receipts with conservation checks,
 controller buffer reservations (including scratch/GC), zone-managed image
 validation, and logical page invalidation / wear-output hooks needed by SGLang. The old bundled
 client rejects the new read receipt even after every config is fixed. Running
-from the HBServe directory selects this bundled client ahead of PYTHONPATH;
-therefore configuration-only changes do not fix standalone HBServe. No legacy
+from the ServeLoop directory selects this bundled client ahead of PYTHONPATH;
+therefore configuration-only changes do not fix standalone ServeLoop. No legacy
 field fallback or old physical model is reintroduced.
 
 The current backend also emits a `HOST_DRAM` transaction census and an explicit
@@ -160,7 +160,7 @@ Do not rewrite historical experiment JSON, configs, manifests or results.
 ## MoE prefix routing identity
 
 Python integrations may enable MoE prefix caching by passing the same router to
-`HBServeCompiler` and `HBServePlacement`. The router must implement
+`ServeLoopCompiler` and `ServeLoopPlacement`. The router must implement
 `PrefixRouterProvider.prefix_block_keys(request=..., model=..., block_tokens=...)`.
 Return one key for each complete prompt block. Equal keys must imply the same
 model, causal token prefix and expert decisions for all layers through that

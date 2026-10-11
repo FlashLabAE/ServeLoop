@@ -4,11 +4,11 @@ from pathlib import Path
 import random
 import unittest
 
-from hbserve.catalog import load_model_any
-from hbserve.coarse_analytic import AnalyticCoverageCompiler
-from hbserve.coarse_l2 import RangeLRU, CoarseL2Compiler
-from hbserve.contracts import BatchSlice, ScheduledBatch, HBServeError
-from hbserve.io import load_request_trace
+from serveloop.catalog import load_model_any
+from serveloop.coarse_analytic import AnalyticCoverageCompiler
+from serveloop.coarse_l2 import RangeLRU, CoarseL2Compiler
+from serveloop.contracts import BatchSlice, ScheduledBatch, ServeLoopError
+from serveloop.io import load_request_trace
 
 DATA=Path(__file__).resolve().parents[1]/'examples/coarse-coverage'
 
@@ -84,7 +84,7 @@ class RangeCacheTests(unittest.TestCase):
         self.assertEqual([(t.op,t.offset,t.bytes) for t in c.invalidate('a')],[('W',32,3)])
         self.assertEqual(c.resident,0)
         for bad in (0,-32,33,True):
-            with self.assertRaises(HBServeError):RangeLRU(bad)
+            with self.assertRaises(ServeLoopError):RangeLRU(bad)
 
 
 class CompilerCacheTests(unittest.TestCase):
@@ -96,11 +96,11 @@ class CompilerCacheTests(unittest.TestCase):
     def test_unsupported_bound_and_multi_request_are_rejected(self):
         self.compiler(64)
         options=dict(models={self.model.model_id:self.model},request_trace=self.trace)
-        with self.assertRaises(HBServeError):
+        with self.assertRaises(ServeLoopError):
             CoarseL2Compiler(AnalyticCoverageCompiler(cache_bound='ideal-temporaries',**options),64)
         multiple=replace(self.trace,requests=(self.trace.requests[0],
             replace(self.trace.requests[0],request_id='other-request')))
-        with self.assertRaises(HBServeError):
+        with self.assertRaises(ServeLoopError):
             CoarseL2Compiler(AnalyticCoverageCompiler(models=options['models'],request_trace=multiple),64)
 
     def test_continuous_states_causal_graph_and_final_dirty_drain(self):
@@ -114,7 +114,7 @@ class CompilerCacheTests(unittest.TestCase):
         self.assertGreater(c.cache.stats['W_hit_sectors'],0)
         self.assertGreater(c.cache.stats['R_hit_sectors'],0)
         self.assertGreater(c.cache.stats['final_drain_sectors'],0)
-        with self.assertRaises(HBServeError):c.compile(b)
+        with self.assertRaises(ServeLoopError):c.compile(b)
 
 
 if __name__=='__main__':unittest.main()

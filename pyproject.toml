@@ -3,8 +3,8 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hbserve"
-version = "0.1.0a2"
+name = "serveloop"
+version = "0.2.0a1"
 description = "LLM serving and fixed-window memory workload frontend for HBFSim"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -20,12 +20,12 @@ classifiers = [
 dependencies = []
 
 [project.scripts]
-hbserve = "hbserve.__main__:main"
+serveloop = "serveloop.__main__:main"
 
 [project.urls]
-Repository = "https://github.com/Systems-and-Memory-Lab/HBServe"
-Issues = "https://github.com/Systems-and-Memory-Lab/HBServe/issues"
+Repository = "https://github.com/Systems-and-Memory-Lab/ServeLoop"
+Issues = "https://github.com/Systems-and-Memory-Lab/ServeLoop/issues"
 
 [tool.setuptools.packages.find]
-include = ["hbserve*", "hbfsim_client*"]
+include = ["serveloop*", "hbfsim_client*"]
 exclude = ["tests*"]

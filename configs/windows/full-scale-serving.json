@@ -1,6 +1,6 @@
 {
   "schema": {
-    "name": "hbserve.fixed_window_experiment",
+    "name": "serveloop.fixed_window_experiment",
     "version": 1
   },
   "experiment_id": "hbf-1tb-moe-serving-v1",

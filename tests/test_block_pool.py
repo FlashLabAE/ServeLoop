@@ -5,8 +5,8 @@ import random
 import tracemalloc
 import unittest
 
-from hbserve.contracts import HBServeError, canonical_sha256
-from hbserve.placement import _BlockPool
+from serveloop.contracts import ServeLoopError, canonical_sha256
+from serveloop.placement import _BlockPool
 
 
 class BlockPoolTests(unittest.TestCase):
@@ -58,15 +58,15 @@ class BlockPoolTests(unittest.TestCase):
 
     def test_invalid_reference_operations(self):
         pool = _BlockPool("hbf", 0, 10 * 64, 64)
-        with self.assertRaises(HBServeError):
+        with self.assertRaises(ServeLoopError):
             pool.allocate(11)
         blocks = pool.allocate(3)
         pool.retain([blocks[0]])
         pool.release(blocks)
         self.assertEqual(pool.references[0], 1)
-        with self.assertRaises(HBServeError):
+        with self.assertRaises(ServeLoopError):
             pool.release([1])
-        with self.assertRaises(HBServeError):
+        with self.assertRaises(ServeLoopError):
             pool.retain([1])
         pool.release([0])
         self.assertEqual(pool.allocate(4), [0, 1, 2, 3])

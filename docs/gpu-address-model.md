@@ -8,7 +8,7 @@ models with their own declared scope.
 
 ## What is generated
 
-`hbserve/gpu_addresses.py` describes two measured A100 kernel families:
+`serveloop/gpu_addresses.py` describes two measured A100 kernel families:
 
 - Paged FA2, BF16, head dimension 128, 256-token cache blocks. Pure decode
   uses GQA folding and the source-derived split-KV dispatch; mixed/prefill
@@ -31,7 +31,7 @@ FlashAttention model. Source references:
 To inspect application requests without materializing an entire workload:
 
 ```python
-from hbserve.gpu_addresses import iter_batch_application
+from serveloop.gpu_addresses import iter_batch_application
 
 for operator_id, access in iter_batch_application(canonical_batch):
     # access: CTA, logical warp, tensor, 32 lane offsets, width and mask.

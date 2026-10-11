@@ -1,6 +1,6 @@
 # Security policy
 
-HBServe parses model, request, router, placement, and simulator configuration
+ServeLoop parses model, request, router, placement, and simulator configuration
 files as untrusted data, but it is not a security sandbox. Only run a simulator
 binary you trust. Avoid publishing result bundles until their input artifact
 paths and metadata have been reviewed for sensitive information.

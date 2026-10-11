@@ -11,8 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from hbfsim_client.transaction_protocol import HbfGeometry
-from hbserve.contracts import HBServeError, canonical_sha256
-from hbserve.recovery import CHECKPOINT_SCHEMA, link_payload_by_stack, verify_checkpoint
+from serveloop.contracts import ServeLoopError, canonical_sha256
+from serveloop.recovery import CHECKPOINT_SCHEMA, link_payload_by_stack, verify_checkpoint
 
 
 def seal_receipt(record):
@@ -52,13 +52,13 @@ class CheckpointTests(unittest.TestCase):
 
     def test_tampered_receipt_is_rejected(self):
         self.record["body"]["epoch"] += 1
-        with self.assertRaisesRegex(HBServeError, "receipt digest mismatch"):
+        with self.assertRaisesRegex(ServeLoopError, "receipt digest mismatch"):
             verify_checkpoint(self.record)
 
     def test_tampered_manifest_is_rejected_after_receipt_is_resealed(self):
         self.record["body"]["versions"][0]["bytes"] += 1
         seal_receipt(self.record)
-        with self.assertRaisesRegex(HBServeError, "manifest digest mismatch"):
+        with self.assertRaisesRegex(ServeLoopError, "manifest digest mismatch"):
             verify_checkpoint(self.record)
 
     def test_image_content_and_declared_size_mismatches_are_rejected(self):
@@ -71,7 +71,7 @@ class CheckpointTests(unittest.TestCase):
                 else:
                     record["image"]["bytes"] += 1
                     seal_receipt(record)
-                with self.assertRaisesRegex(HBServeError, "image artifact mismatch"):
+                with self.assertRaisesRegex(ServeLoopError, "image artifact mismatch"):
                     verify_checkpoint(record)
 
 

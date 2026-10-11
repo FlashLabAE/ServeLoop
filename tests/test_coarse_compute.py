@@ -1,12 +1,12 @@
 from pathlib import Path
 import unittest
-from hbserve.compiler import HBServeCompiler
-from hbserve.coarse_catalog import CatalogCoverageCompiler
-from hbserve.coarse_analytic import AnalyticCoverageCompiler
-from hbserve.coarse_l2 import CoarseL2Compiler
-from hbserve.contracts import RooflineTimingProvider, HBServeError
-from hbserve.catalog import load_model_any
-from hbserve.io import load_request_trace
+from serveloop.compiler import ServeLoopCompiler
+from serveloop.coarse_catalog import CatalogCoverageCompiler
+from serveloop.coarse_analytic import AnalyticCoverageCompiler
+from serveloop.coarse_l2 import CoarseL2Compiler
+from serveloop.contracts import RooflineTimingProvider, ServeLoopError
+from serveloop.catalog import load_model_any
+from serveloop.io import load_request_trace
 from test_coarse_catalog import setup
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -24,7 +24,7 @@ class CoarseComputeTests(unittest.TestCase):
         for path in sorted((ROOT/'models').glob('*.json')):
             with self.subTest(model=path.name):
                 old,m,kw,batches=setup(path)
-                original=HBServeCompiler(**kw,timing=provider)
+                original=ServeLoopCompiler(**kw,timing=provider)
                 enhanced=CatalogCoverageCompiler(**kw,timing=provider)
                 memory=CatalogCoverageCompiler(**kw)
                 cached=CoarseL2Compiler(CatalogCoverageCompiler(**kw,timing=provider),41943040)
@@ -61,7 +61,7 @@ class CoarseComputeTests(unittest.TestCase):
     def test_dense16_alias_and_compute_rate_scaling(self):
         model=load_model_any(ROOT/'examples/coarse-coverage/model.json');trace=load_request_trace(ROOT/'examples/coarse-coverage/requests.json')
         kw=dict(models={model.model_id:model},request_trace=trace)
-        from hbserve.contracts import ScheduledBatch,BatchSlice
+        from serveloop.contracts import ScheduledBatch,BatchSlice
         batch=ScheduledBatch(0,model.model_id,(BatchSlice('observed-request',0,16,0,True,'prefill'),),0.)
         a=AnalyticCoverageCompiler(**kw,timing=RooflineTimingProvider(200,.5)).compile(batch)
         b=AnalyticCoverageCompiler(**kw,timing=RooflineTimingProvider(400,.5)).compile(batch)
@@ -71,5 +71,5 @@ class CoarseComputeTests(unittest.TestCase):
     def test_other_timing_modes_stay_rejected(self):
         from types import SimpleNamespace
         old,m,kw,bs=setup(ROOT/'models/llama31-8b-w8-kv-bf16.json')
-        with self.assertRaisesRegex(HBServeError,'memory_only or roofline'):
+        with self.assertRaisesRegex(ServeLoopError,'memory_only or roofline'):
             CatalogCoverageCompiler(**kw,timing=SimpleNamespace(timing_model='gpu_calibrated'))

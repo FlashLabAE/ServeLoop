@@ -1,6 +1,6 @@
 {
   "schema": {
-    "name": "hbserve.placement",
+    "name": "serveloop.placement",
     "version": 2
   },
   "hbm_capacity_bytes": 2147483648,

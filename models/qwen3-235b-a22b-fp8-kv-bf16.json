@@ -1,6 +1,6 @@
 {
   "schema": {
-    "name": "hbserve.public_model",
+    "name": "serveloop.public_model",
     "version": 1
   },
   "intended_use": {

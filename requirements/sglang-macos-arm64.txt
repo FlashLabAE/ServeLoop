@@ -1,6 +1,6 @@
 # Working environment snapshot: Python 3.12, macOS arm64, 2026-09-17.
-# Optional: the base HBServe/HBFSim frontend has no third-party Python dependencies.
-# SGLang and its kernel wrappers come from the source revision in hbserve/sglang/__init__.py.
+# Optional: the base ServeLoop/HBFSim frontend has no third-party Python dependencies.
+# SGLang and its kernel wrappers come from the source revision in serveloop/sglang/__init__.py.
 # This file includes platform-specific MLX wheels; see docs/sglang.md for Linux.
 aiconfigurator==0.11.0
 aiconfigurator-core==0.11.0

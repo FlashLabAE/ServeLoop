@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import tempfile
 import unittest
 
-from hbserve.sglang.requests import (
+from serveloop.sglang.requests import (
     bind_request_ids, encode_trace, load_requests, request_stats_on_input_clock, validate_request_stats,
 )
 from workloads.production_request_trace.canonical import ProductionTrace, RECORD_SCHEMA, publish_trace

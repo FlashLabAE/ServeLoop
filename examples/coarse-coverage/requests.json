@@ -1,6 +1,6 @@
 {
   "schema": {
-    "name": "hbserve.request_trace",
+    "name": "serveloop.request_trace",
     "version": 1
   },
   "provenance": {

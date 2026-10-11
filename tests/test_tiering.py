@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from test_windows import tiny_experiment
-from hbserve.windows.experiment import (
+from serveloop.windows.experiment import (
     build_preflight, execute_topology, load_experiment_context, new_remapper,
 )
 

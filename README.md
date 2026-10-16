@@ -1,8 +1,8 @@
 # ServeLoop
 
-**The LLM-serving frontend for [HBFSim](https://github.com/FlashLaboratory/HBFSim).**
+**The LLM-serving frontend for [HBFSim](https://github.com/FlashLabAE/HBFSim).**
 
-[![CI](https://github.com/FlashLaboratory/ServeLoop/actions/workflows/ci.yml/badge.svg)](https://github.com/FlashLaboratory/ServeLoop/actions/workflows/ci.yml)
+[![CI](https://github.com/FlashLabAE/ServeLoop/actions/workflows/ci.yml/badge.svg)](https://github.com/FlashLabAE/ServeLoop/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-informational)
 
@@ -58,8 +58,8 @@ Clone the two repositories side by side and build HBFSim. You need CMake
 is Python 3.9, so install a newer Python (from python.org or Homebrew) first.
 
 ```bash
-git clone https://github.com/FlashLaboratory/HBFSim.git
-git clone https://github.com/FlashLaboratory/ServeLoop.git
+git clone https://github.com/FlashLabAE/HBFSim.git
+git clone https://github.com/FlashLabAE/ServeLoop.git
 cd HBFSim
 python3 -m hbfsim doctor    # checks the toolchain and finds ../ServeLoop
 python3 -m hbfsim build
@@ -105,7 +105,7 @@ latencies and physical completions; earlier results are never overwritten.
 **From the HBFSim checkout**, as in the quick start. This is the recommended
 setup: HBFSim's own `hbfsim_client` and system profiles are used, so the client
 always matches the engine you built. HBFSim's
-[ServeLoop guide](https://github.com/FlashLaboratory/HBFSim/blob/main/docs/guides/serveloop.md)
+[ServeLoop guide](https://github.com/FlashLabAE/HBFSim/blob/main/docs/guides/serveloop.md)
 explains what crosses the boundary between the two.
 
 **As an installed package**, which suits work on ServeLoop itself:

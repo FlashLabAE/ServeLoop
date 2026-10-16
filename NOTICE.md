@@ -8,7 +8,7 @@ experiment history for this repository.
 ServeLoop retains the original HBFSim copyright notice in `LICENSE`.
 
 `hbfsim_client/`, `configs/systems/` and `configs/parameter-provenance.json`
-are copies of the same paths in [HBFSim](https://github.com/FlashLaboratory/HBFSim)
+are copies of the same paths in [HBFSim](https://github.com/FlashLabAE/HBFSim)
 at commit `0e46ac0d073bab5df3c9e7e7ecbfac42e3756b6f`, distributed under the same
 MIT License; `configs/ocp-profile-source.json` records their source hashes.
 The 70B descriptor preserves the original per-output-channel W8 scale and

@@ -19,7 +19,7 @@ HBFSim build is available.
 ## Changes that belong in HBFSim
 
 `hbfsim_client/`, `configs/systems/` and `configs/parameter-provenance.json`
-are copies from [HBFSim](https://github.com/FlashLaboratory/HBFSim). Change
+are copies from [HBFSim](https://github.com/FlashLabAE/HBFSim). Change
 them there first, then copy the files here, update the commit, hashes and
 changed parameters in `configs/ocp-profile-source.json`, and run:
 

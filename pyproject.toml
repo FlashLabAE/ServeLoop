@@ -23,8 +23,8 @@ dependencies = []
 serveloop = "serveloop.__main__:main"
 
 [project.urls]
-Repository = "https://github.com/FlashLaboratory/ServeLoop"
-Issues = "https://github.com/FlashLaboratory/ServeLoop/issues"
+Repository = "https://github.com/FlashLabAE/ServeLoop"
+Issues = "https://github.com/FlashLabAE/ServeLoop/issues"
 
 [tool.setuptools.packages.find]
 include = ["serveloop*", "hbfsim_client*"]

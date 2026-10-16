@@ -8,7 +8,7 @@ placement and protocol behavior with a compatible HBFSim build.
 
 HBFSim owns the hardware model, its profiles and its client protocol. Three
 parts of this repository are verbatim copies of the same paths in
-[HBFSim](https://github.com/FlashLaboratory/HBFSim):
+[HBFSim](https://github.com/FlashLabAE/HBFSim):
 
 - `configs/systems/` (complete system profiles),
 - `configs/parameter-provenance.json` (source and evidence grade of every

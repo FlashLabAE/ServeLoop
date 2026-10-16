@@ -138,7 +138,7 @@ class PrefixTests(unittest.TestCase):
         for capacity in (0, 65536):
             placement = ServeLoopPlacement(models=models, spec=replace(_spec(models), prefix_cache_bytes=capacity))
             executor = HbfSimExecutor(simulator_path=self.simulator,
-                                     system_config_paths=(ROOT / "configs/4hbm-4hbf.cfg",), placement=placement)
+                                     system_config_paths=(ROOT / "configs/systems/4hbm-4hbf.cfg",), placement=placement)
             try:
                 result = _engine(models, trace, executor,
                                  SchedulerPolicy(max_batch_requests=2, max_batch_tokens=16, prefill_chunk_tokens=16),

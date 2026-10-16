@@ -1224,7 +1224,7 @@ class PlacementTests(unittest.TestCase):
         from hbfsim_client.simulation_session import ResolvedSystemConfig
 
         system = ResolvedSystemConfig.load(
-            [ROOT / "configs/4hbm-4hbf-miniquick.cfg"]
+            [ROOT / "configs/systems/miniquick/4hbm-4hbf.cfg"]
         ).resolve(self.simulator)
         model = _dense()
         spec = derive_placement(
@@ -1450,7 +1450,7 @@ class PhysicalIntegrationTests(unittest.TestCase):
         model = _dense()
         models = {model.model_id: model}
         system = ResolvedSystemConfig.load((
-            ROOT / "configs/4hbm-4hbf.cfg",
+            ROOT / "configs/systems/4hbm-4hbf.cfg",
             ROOT / "configs/nvme-ssd.cfg",
         ))
         for reuse_extent in (False, True):
@@ -1537,7 +1537,7 @@ class PhysicalIntegrationTests(unittest.TestCase):
 
     def _system_configs(self) -> tuple[Path, ...]:
         return (
-            ROOT / "configs/eight-stack-baseline.cfg",
+            ROOT / "configs/systems/eight-stack-baseline.cfg",
             ROOT / "configs/simulation-session-mini.cfg",
             ROOT / "configs/cxl-memory.cfg",
         )
@@ -1557,7 +1557,7 @@ class PhysicalIntegrationTests(unittest.TestCase):
                 "--simulator",
                 str(self.simulator),
                 "--system",
-                str(ROOT / "configs/eight-stack-baseline.cfg"),
+                str(ROOT / "configs/systems/eight-stack-baseline.cfg"),
                 "--overlay",
                 str(ROOT / "configs/simulation-session-mini.cfg"),
                 "--overlay",

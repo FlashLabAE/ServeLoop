@@ -619,19 +619,16 @@ def _validate_device_accounting(
             abs_tol=1e-12,
         ):
             raise SimulationSessionError(f"{description}.hbf WAF does not conserve")
-    for field_name, external, expected_kind in (
-        ("external", external, external_kind),
-        ("host_dram", host_dram, "host-dram"),
-    ):
+    for field_name, external, expected_kind in (("external", external, external_kind), ("host_dram", host_dram, "host-dram")):
         if external is None:
             continue
         if external.get("kind") != expected_kind:
             raise SimulationSessionError(
-                f"{description}.{field_name} backing kind diverged"
+                f"{description}.external backing kind diverged"
             )
         counters = {
             field: _nonnegative_integer(
-                external.get(field), f"{description}.{field_name}.{field}"
+                external.get(field), f"{description}.external.{field}"
             )
             for field in (
                 "read_requests",
@@ -673,7 +670,7 @@ def _validate_device_accounting(
             + counters["s2m_protocol_bytes"]
         ):
             raise SimulationSessionError(
-                f"{description}.{field_name} transport bytes do not conserve"
+                f"{description}.external transport bytes do not conserve"
             )
         for field in (
             "outstanding_wait_work_ns",
@@ -692,21 +689,21 @@ def _validate_device_accounting(
             "transport_propagation_work_ns",
         ):
             _finite_nonnegative(
-                external.get(field), f"{description}.{field_name}.{field}"
+                external.get(field), f"{description}.external.{field}"
             )
         if not isinstance(external.get("stage_work"), Mapping):
             raise SimulationSessionError(
-                f"{description}.{field_name} stage-work receipt is missing"
+                f"{description}.external stage-work receipt is missing"
             )
         device_cache = external.get("device_cache")
         if not isinstance(device_cache, Mapping):
             raise SimulationSessionError(
-                f"{description}.{field_name} device-cache census is missing"
+                f"{description}.external device-cache census is missing"
             )
         cache_counters = {
             field: _nonnegative_integer(
                 device_cache.get(field),
-                f"{description}.{field_name}.device_cache.{field}",
+                f"{description}.external.device_cache.{field}",
             )
             for field in EXTERNAL_DEVICE_CACHE_COUNTER_FIELDS
         }
@@ -717,13 +714,13 @@ def _validate_device_accounting(
             > counters["write_requests"]
         ):
             raise SimulationSessionError(
-                f"{description}.{field_name} device-cache census exceeds "
+                f"{description}.external device-cache census exceeds "
                 "caller requests"
             )
         for field in EXTERNAL_DEVICE_CACHE_WORK_FIELDS:
             _finite_nonnegative(
                 device_cache.get(field),
-                f"{description}.{field_name}.device_cache.{field}",
+                f"{description}.external.device_cache.{field}",
             )
 
 
@@ -838,11 +835,11 @@ class ResolvedSystemConfig:
             "hbm-capacity-bytes", "hbf-stacks", "hbf-channels",
             "hbf-dies-per-channel", "hbf-planes-per-die", "hbf-blocks-per-plane",
             "hbf-pages-per-block", "hbf-page-size", "hbf-mapping-entries-per-page",
-            "hbf-mapping-mode", "hbf-ctrl-dram-bytes",
+            "hbf-mapping-mode", "hbf-mapping-organization", "hbf-ctrl-dram-bytes",
         }
         if (
             not isinstance(values, dict)
-            or not required_values <= set(values) <= required_values | {"hbf-mapping-organization"}
+            or set(values) != required_values
             or not all(isinstance(value, str) for value in values.values())
         ):
             raise SimulationSessionError("invalid HBFSim resolved geometry values")
@@ -950,7 +947,17 @@ class ResolvedSystemConfig:
         return self.integer("hbm-capacity-bytes")
 
     @property
+    def hbf_mapping_placement(self) -> str:
+        placement = self.values.get("hbf-mapping-placement", "host")
+        if placement not in {"host", "device"}:
+            raise SimulationSessionError("resolved HBFSim config hbf-mapping-placement must be host or device")
+        return placement
+
+    @property
     def hbf_buffer_hbm_bytes(self) -> int:
+        # A device-local mapping keeps its records in HBF device DRAM and reserves no HBM.
+        if self.hbf_mapping_placement == "device":
+            return 0
         burst = self.hbm_burst_bytes
         return (self.hbf_ctrl_dram_bytes + burst - 1) // burst * burst
 
@@ -975,6 +982,13 @@ class ResolvedSystemConfig:
         if burst_bits % 8:
             raise SimulationSessionError("HBM burst geometry is not byte aligned")
         return burst_bits // 8
+
+    @property
+    def hbf_mapping_organization(self) -> str:
+        organization = self.values.get("hbf-mapping-organization", "page")
+        if organization not in {"page", "block", "block-log", "extent", "object-segment"}:
+            raise SimulationSessionError("unknown HBF mapping organization")
+        return organization
 
     @property
     def hbf_mapping_mode(self) -> str:
@@ -1148,7 +1162,9 @@ class ResolvedSystemConfig:
             * geometry.stacks
         )
         write_buffer_bytes = 0
-        if self.boolean("hbf-write-coalescing", default=False):
+        # With HBF device DRAM the write buffer lives on the device, not in HBM.
+        device_dram = int(self.values.get("hbf-device-dram-capacity-denominator", "0"))
+        if self.boolean("hbf-write-coalescing", default=False) and device_dram == 0:
             write_buffer_bytes = (
                 self.integer("hbf-write-buffer-pages")
                 * geometry.page_size_bytes
@@ -1314,6 +1330,13 @@ class SimulationSession:
             )
         if not enable_hbm and not enable_hbf and not enable_external and host_dram_config is None:
             raise SimulationSessionError("simulation session must enable a memory tier")
+        if enable_hbf and system_config.hbf_mapping_organization != "page":
+            # Primary indexes have geometry-dependent metadata/copy reserves.
+            # Use the C++ policy's resolution instead of duplicating it here.
+            if system_config.logical_hbf_capacity_bytes is None:
+                system_config = system_config.resolve(self._simulator_path)
+            if static_hbf_blocks_per_plane or published_hbf_blocks_per_plane:
+                raise SimulationSessionError("host primary mapping owns the full HBF media")
         configured_hbm_capacity = system_config.hbm_capacity_bytes
         if enable_hbm:
             capacity = (
@@ -1544,6 +1567,7 @@ class SimulationSession:
         self._issued_work_frontier_ns = 0.0
         self._next_run_batch_id = 0
         self._stop_receipt: dict[str, Any] | None = None
+        self._terminal_failure: dict[str, Any] | None = None
         self._checkpoint_ids: set[str] = set()
         self._wear_snapshot_ids: set[str] = set()
         self._checkpoint_receipts: list[dict[str, Any]] = []
@@ -1590,6 +1614,15 @@ class SimulationSession:
                 ),
                 "raw_capacity_pages": raw_capacity_pages,
             }
+            if system_config.hbf_mapping_organization != "page" and initial_pages:
+                actual = ready.get("initial_hbf_logical_image", {})
+                data_pages = _nonnegative_integer(actual.get("physical_data_pages"), "initial data allocation")
+                metadata_pages = _positive_integer(actual.get("physical_mapping_pages"), "initial checkpoint allocation")
+                if data_pages < initial_pages or data_pages + metadata_pages > raw_capacity_pages:
+                    raise SimulationSessionError("structural initial image exceeds NAND allocation")
+                expected_initial_image.update(physical_data_pages=data_pages,
+                    physical_mapping_pages=metadata_pages,
+                    free_pages_after_setup=raw_capacity_pages - data_pages - metadata_pages)
             persistent_ready = ready.get("initial_hbf_persistent_image")
             if persistent_artifact is None:
                 persistent_ready_valid = persistent_ready is None
@@ -1669,6 +1702,7 @@ class SimulationSession:
                 or ready.get("hbf_buffer_hbm_bytes") != self._hbf_buffer_hbm_bytes
                 or ready.get("hbm_application_capacity_bytes") != self._hbm_application_capacity_bytes
                 or ready.get("hbf_mapping_mode") != self._hbf_mapping_mode
+                or ready.get("hbf_mapping_organization") != system_config.hbf_mapping_organization
                 or ready.get("hbf_ctrl_dram_bytes")
                 != self._hbf_ctrl_dram_bytes
                 or ready.get("hbf_ctrl_dram_capacity_denominator")
@@ -1757,7 +1791,9 @@ class SimulationSession:
             if readable:
                 return
 
-    def _read_response(self, description: str) -> dict[str, Any]:
+    def _read_response(
+        self, description: str, *, raw_response: list[str] | None = None
+    ) -> dict[str, Any]:
         assert self._process.stdout is not None
         self._wait_for_output(description)
         line = self._process.stdout.readline()
@@ -1768,6 +1804,8 @@ class SimulationSession:
             raise SimulationSessionError(
                 f"HBFSim ended before {description} (exit={code}){suffix}"
             )
+        if raw_response is not None:
+            raw_response.append(line)
         if not line.endswith("\n"):
             raise SimulationSessionError(f"{description} is not newline terminated")
         return _json_object(line, description)
@@ -1810,31 +1848,11 @@ class SimulationSession:
                 f"HBFSim rejected batch {batch.batch_id}: "
                 f"{message if isinstance(message, str) else 'unknown input error'}"
             )
-        expected_census = {
-            target: {"transactions": 0, "bytes": 0}
-            for target in TRANSACTION_TARGETS
-        }
-        for transaction in batch.transactions:
-            expected_census[transaction.target]["transactions"] += 1
-            expected_census[transaction.target]["bytes"] += transaction.bytes
-        memory_transactions = sum(
-            transaction.target != "BARRIER"
-            for transaction in batch.transactions
-        )
-        barriers = len(batch.transactions) - memory_transactions
-        dependency_edges = sum(
-            len(transaction.dependencies) for transaction in batch.transactions
-        )
+        expected_census = batch.census["by_target"]
         expected_scalars = {
             "sequence": self._next_sequence,
-            "transactions": len(batch.transactions),
-            "memory_transactions": memory_transactions,
-            "barriers": barriers,
-            "dependency_edges": dependency_edges,
+            **batch.census["scalars"],
             "frontier_transactions": batch.frontier_transactions,
-            "transaction_bytes": sum(
-                transaction.bytes for transaction in batch.transactions
-            ),
         }
         if (
             completion.get("schema") != COMPLETION_SCHEMA
@@ -1851,14 +1869,7 @@ class SimulationSession:
             raise SimulationSessionError(
                 f"HBFSim completion receipt diverged for batch {batch.batch_id}"
             )
-        expected_latency_transactions = {
-            target: {"read": 0, "write": 0} for target in TRANSACTION_TARGETS
-        }
-        for transaction in batch.transactions:
-            if transaction.target == "BARRIER":
-                continue
-            operation = "read" if transaction.op == "R" else "write"
-            expected_latency_transactions[transaction.target][operation] += 1
+        expected_latency_transactions = batch.census["latency_transactions"]
         _validate_latency_matrix(
             completion.get("transaction_latency_by_target"),
             description=f"batch {batch.batch_id} transaction latency",
@@ -1868,8 +1879,7 @@ class SimulationSession:
             completion.get("device_delta"),
             enable_hbm=self._enable_hbm,
             enable_hbf=self._enable_hbf,
-            enable_external=self._enable_external,
-            enable_host_dram=self._enable_host_dram,
+            enable_external=self._enable_external, enable_host_dram=self._enable_host_dram,
             external_kind=(
                 None
                 if self._external_backing is None
@@ -1877,10 +1887,8 @@ class SimulationSession:
             ),
             description=f"batch {batch.batch_id} device delta",
         )
-        for device_name, target, identity in (
-            ("external", "EXTERNAL", self._external_backing),
-            ("host_dram", "HOST_DRAM", self._host_dram_backing),
-        ):
+        for device_name, target, identity in (("external", "EXTERNAL", self._external_backing),
+                                               ("host_dram", "HOST_DRAM", self._host_dram_backing)):
             if identity is None:
                 continue
             external_transactions = [t for t in batch.transactions if t.target == target]
@@ -1918,8 +1926,8 @@ class SimulationSession:
                 or external_delta.get("page_run_pages") != external_pages
             ):
                 raise SimulationSessionError(
-                    f"HBFSim {device_name} page-run receipt does not conserve "
-                    f"{device_name} traffic for batch {batch.batch_id}"
+                    f"HBFSim external page-run receipt does not conserve "
+                    f"external traffic for batch {batch.batch_id}"
                 )
         hbm_engine = completion.get("hbm_engine")
         hbm_engine_fields = ("requests", "bursts")
@@ -1990,8 +1998,11 @@ class SimulationSession:
             // page_size
             for transaction in hbf_reads
         )
-        if (normalized_engine["scalar_read_requests"] != len(hbf_reads)
-                or normalized_engine["scalar_read_pages"] != hbf_read_pages):
+        peer_reads = completion.get('peer_native_hbf_reads', {'requests': 0, 'pages': 0})
+        peer_requests = _nonnegative_integer(peer_reads.get('requests'), 'peer native read requests')
+        peer_pages = _nonnegative_integer(peer_reads.get('pages'), 'peer native read pages')
+        if (normalized_engine["scalar_read_requests"] != len(hbf_reads) + peer_requests
+                or normalized_engine["scalar_read_pages"] != hbf_read_pages + peer_pages):
             raise SimulationSessionError(
                 f"HBFSim read-engine receipt does not conserve HBF "
                 f"reads for batch {batch.batch_id}"
@@ -2062,6 +2073,19 @@ class SimulationSession:
                 f"HBFSim exported completions for batch {batch.batch_id} "
                 "although none were requested"
             )
+        observed = completion.get("observed_timings", [])
+        if not isinstance(observed, list) or len(observed) != len(batch.observe):
+            raise SimulationSessionError("native timing observation count differs from request")
+        observed_ids = set(batch.observe)
+        observed_inputs = {tx.id: tx for tx in batch.transactions if tx.id in observed_ids} if observed_ids else {}
+        for identifier, row in zip(batch.observe, observed, strict=True):
+            if not isinstance(row, Mapping) or set(row) != {"id", "start_ns", "finish_ns"} or row['id'] != identifier:
+                raise SimulationSessionError("native timing observation IDs/schema differ from request")
+            start = _finite_nonnegative(row['start_ns'], "observed start")
+            finish = _finite_nonnegative(row['finish_ns'], "observed finish")
+            if (start < numeric['batch_origin_ns'] + observed_inputs[identifier].issue_ns
+                    or finish < start or finish > numeric['finish_ns'] + 1e-6):
+                raise SimulationSessionError("native timing observation violates batch timing")
         self._last_finish_ns = numeric["blocking_finish_ns"]
         self._issued_work_frontier_ns = max(
             self._issued_work_frontier_ns, numeric["finish_ns"]
@@ -2179,8 +2203,7 @@ class SimulationSession:
             raise SimulationSessionError("logical invalidation timing diverged")
         _validate_device_accounting(
             receipt.get("device_delta"), enable_hbm=self._enable_hbm,
-            enable_hbf=True, enable_external=self._enable_external,
-            enable_host_dram=self._enable_host_dram,
+            enable_hbf=True, enable_external=self._enable_external, enable_host_dram=self._enable_host_dram,
             external_kind=None if self._external_backing is None else str(self._external_backing["kind"]),
             description=f"logical invalidation {identifier} device delta",
         )
@@ -2190,6 +2213,106 @@ class SimulationSession:
             raise SimulationSessionError("logical invalidation physical traffic diverged")
         self._last_finish_ns = self._issued_work_frontier_ns = finish
         self._invalidation_receipts.append(deepcopy(receipt))
+        return deepcopy(receipt)
+
+    def configure_peer_memory(self, command_id: str, *, policy: str, hbm_bytes: int,
+                              logical_bytes: int, kv_begin: int, unit_bytes: int,
+                              transfer_bytes: int, initialized) -> dict[str, Any]:
+        """Declare objects and capacity; the native HBF module owns placement and migration."""
+        require_safe_identifier(command_id, 'peer configuration id')
+        if policy not in {'kv_first', 'weights_first'}:
+            raise SimulationSessionError('unknown peer placement priority')
+        values = [hbm_bytes, logical_bytes, kv_begin, unit_bytes, transfer_bytes]
+        for value in values:
+            _nonnegative_integer(value, 'peer layout')
+        ranges = tuple(initialized)
+        for begin, end in ranges:
+            _nonnegative_integer(begin, 'peer initialized begin')
+            if _positive_integer(end, 'peer initialized end') <= begin:
+                raise SimulationSessionError('empty peer initial range')
+        payload = f'PEER_CONFIG {command_id} {policy} ' + ' '.join(map(str, values)) + f' {len(ranges)}\n'
+        payload += ''.join(f'RANGE {begin} {end}\n' for begin, end in ranges)
+        receipt = self._peer_command(command_id, payload)
+        self._peer_setup = dict(receipt, logical_bytes=logical_bytes, kv_begin=kv_begin,
+            transfer_bytes=transfer_bytes, initialized_ranges=ranges)
+        return receipt
+
+    def release_peer_memory(self, command_id: str, *, address: int, bytes: int) -> dict[str, Any]:
+        require_safe_identifier(command_id, 'peer release id')
+        _nonnegative_integer(address, 'peer release address')
+        _positive_integer(bytes, 'peer release bytes')
+        return self._peer_command(command_id, f'PEER_RELEASE {command_id} {address} {bytes}\n')
+
+    def _peer_command(self, command_id: str, payload: str) -> dict[str, Any]:
+        if self._closed or not self._enable_hbf or not self._enable_hbm:
+            raise SimulationSessionError('peer memory needs an active HBM/HBF session')
+        assert self._process.stdin is not None
+        self._process.stdin.write(payload)
+        self._process.stdin.flush()
+        receipt = self._read_response(f'peer memory {command_id}')
+        if receipt.get('result') == 'error':
+            raise SimulationSessionError(str(receipt.get('message', 'peer memory rejected')))
+        if receipt.get('schema') != 'hbfsim.peer_memory.v1' or receipt.get('id') != command_id:
+            raise SimulationSessionError('invalid peer memory receipt')
+        finish = _finite_nonnegative(receipt.get('finish_ns'), 'peer memory finish')
+        if finish < self._last_finish_ns:
+            raise SimulationSessionError('peer memory frontier moved backwards')
+        self._last_finish_ns = finish
+        self._issued_work_frontier_ns = max(self._issued_work_frontier_ns, finish)
+        return receipt
+
+    def hbf_mapping_snapshot(self, snapshot_id: str) -> dict[str, Any]:
+        """Read unified mapping, NAND, memory and merge counters without a drain."""
+        if self._closed or not self._enable_hbf:
+            raise SimulationSessionError("mapping statistics require an active HBF session")
+        try:
+            identifier = require_safe_identifier(snapshot_id, "mapping snapshot id")
+        except TransactionProtocolError as error:
+            raise SimulationSessionError(str(error)) from error
+        assert self._process.stdin is not None
+        self._process.stdin.write(f"MAPPING_STATS {identifier}\n")
+        self._process.stdin.flush()
+        receipt = self._read_response(f"mapping snapshot {identifier}")
+        if (receipt.get("schema") != "hbfsim.hbf_mapping_snapshot.v1" or
+                receipt.get("result") != "pass" or receipt.get("id") != identifier or
+                not isinstance(receipt.get("mapping"), dict)):
+            raise SimulationSessionError("invalid mapping snapshot")
+        return deepcopy(receipt["mapping"])
+
+    def hbf_object_command(
+        self, command: str, command_id: str, *, object_id: int,
+        first_lpn: int = 0, page_count: int = 0,
+    ) -> dict[str, Any]:
+        """CREATE a logical object range, SEAL its payload, or DELETE all pages.
+
+        Requires ``hbf-mapping-organization=object-segment``. SEAL flushes dirty
+        payload and makes the object immutable; checkpoint_image also persists
+        its directory. DELETE discards pending writes and reclaims dead segments.
+        """
+        if self._closed or not self._enable_hbf:
+            raise SimulationSessionError("object commands require an active HBF session")
+        if command not in {"CREATE", "SEAL", "DELETE"}:
+            raise SimulationSessionError("unknown object lifecycle command")
+        try:
+            identifier = require_safe_identifier(command_id, "object command id")
+        except TransactionProtocolError as error:
+            raise SimulationSessionError(str(error)) from error
+        values = [_nonnegative_integer(value, name) for value, name in
+                  ((object_id, "object id"), (first_lpn, "first LPN"), (page_count, "page count"))]
+        assert self._process.stdin is not None
+        self._process.stdin.write(f"OBJECT_{command} {identifier} " + " ".join(map(str, values)) + "\n")
+        self._process.stdin.flush()
+        receipt = self._read_response(f"object command {identifier}")
+        if receipt.get("result") == "error":
+            raise SimulationSessionError(str(receipt.get("message", "object command rejected")))
+        if (receipt.get("schema") != "hbfsim.hbf_object_completion.v1" or
+                receipt.get("result") != "pass" or receipt.get("id") != identifier or
+                receipt.get("command") != f"OBJECT_{command}" or receipt.get("object_id") != object_id):
+            raise SimulationSessionError("invalid object completion")
+        finish = _finite_nonnegative(receipt.get("finish_ns"), "object finish")
+        if finish < self._issued_work_frontier_ns:
+            raise SimulationSessionError("object completion moved backwards")
+        self._last_finish_ns = self._issued_work_frontier_ns = finish
         return deepcopy(receipt)
 
     def hbf_zone_command(
@@ -2230,6 +2353,56 @@ class SimulationSession:
             raise SimulationSessionError("host zone completion moved backwards")
         self._last_finish_ns = finish
         self._issued_work_frontier_ns = finish
+        return deepcopy(receipt)
+
+    def hbf_channel_write_batch(
+        self, batch_id: str, fragments: Sequence[Mapping[str, Any]],
+    ) -> dict[str, Any]:
+        """Execute non-posted channel writes with Base-die 4 KiB accumulation.
+
+        Each fragment has ``id``, ``arrival_offset_ns``, ``address`` and
+        ``bytes``. Offsets are nondecreasing relative to the current completed
+        frontier. Each range is 64 B aligned and stays within one 4 KiB page.
+        The returned ``commands`` contain reception and completion times and
+        OCP status codes (0 success, 2 overlap, 4 full, 5 timeout, 6 order).
+        This call finishes every command, including incomplete-page timeouts;
+        a successful batch receipt does not imply every command succeeded.
+        """
+        if self._closed or not self._enable_hbf or not fragments:
+            raise SimulationSessionError("channel write batch requires an active HBF session and fragments")
+        try:
+            identifier = require_safe_identifier(batch_id, "channel write batch id")
+            lines = [f"ZONE_WRITE_BATCH {identifier} {len(fragments)}"]
+            ids: set[str] = set()
+            previous = 0.0
+            for fragment in fragments:
+                command_id = require_safe_identifier(fragment["id"], "fragment id")
+                at = _finite_nonnegative(fragment["arrival_offset_ns"], "fragment arrival offset")
+                address = _nonnegative_integer(fragment["address"], "fragment address")
+                size = _nonnegative_integer(fragment["bytes"], "fragment bytes")
+                if (command_id in ids or at < previous or not size or address % 64 or
+                        size % 64 or size > 4096 - address % 4096):
+                    raise SimulationSessionError("invalid fragment identity, arrival order, or 64 B range")
+                ids.add(command_id)
+                previous = at
+                lines.append(f"{command_id} {at:.17g} {address} {size}")
+        except (KeyError, TransactionProtocolError) as error:
+            raise SimulationSessionError(str(error)) from error
+        assert self._process.stdin is not None
+        self._process.stdin.write("\n".join(lines) + "\n")
+        self._process.stdin.flush()
+        receipt = self._read_response(f"channel write batch {identifier}")
+        if (receipt.get("schema") != "hbfsim.hbf_channel_write_batch.v1" or
+                receipt.get("result") != "pass" or receipt.get("id") != identifier):
+            raise SimulationSessionError("invalid channel write batch completion")
+        commands = receipt.get("commands")
+        if (not isinstance(commands, list) or len(commands) != len(fragments) or
+                [c.get("id") for c in commands] != [f["id"] for f in fragments]):
+            raise SimulationSessionError("channel write completion identities diverged")
+        finish = _finite_nonnegative(receipt.get("finish_ns"), "channel write finish")
+        if finish < self._issued_work_frontier_ns:
+            raise SimulationSessionError("channel write completion moved backwards")
+        self._last_finish_ns = self._issued_work_frontier_ns = finish
         return deepcopy(receipt)
 
     def hbf_wear_snapshot(self, snapshot_id: str) -> dict[str, Any]:
@@ -2301,8 +2474,7 @@ class SimulationSession:
             )
         _validate_device_accounting(
             receipt.get("device_workload_totals"), enable_hbm=self._enable_hbm,
-            enable_hbf=True, enable_external=self._enable_external,
-            enable_host_dram=self._enable_host_dram,
+            enable_hbf=True, enable_external=self._enable_external, enable_host_dram=self._enable_host_dram,
             external_kind=None if self._external_backing is None else str(self._external_backing["kind"]),
             description=f"wear snapshot {normalized_id} device totals",
         )
@@ -2430,8 +2602,7 @@ class SimulationSession:
             device_delta,
             enable_hbm=self._enable_hbm,
             enable_hbf=True,
-            enable_external=self._enable_external,
-            enable_host_dram=self._enable_host_dram,
+            enable_external=self._enable_external, enable_host_dram=self._enable_host_dram,
             external_kind=(
                 None
                 if self._external_backing is None
@@ -2550,8 +2721,7 @@ class SimulationSession:
                 completion.get("device_workload_totals"),
                 enable_hbm=self._enable_hbm,
                 enable_hbf=self._enable_hbf,
-                enable_external=self._enable_external,
-                enable_host_dram=self._enable_host_dram,
+                enable_external=self._enable_external, enable_host_dram=self._enable_host_dram,
                 external_kind=(
                     None
                     if self._external_backing is None
@@ -2581,7 +2751,7 @@ class SimulationSession:
             self._force_close()
 
     def source_receipt(self) -> dict[str, Any]:
-        return {
+        receipt = {
             "protocol": PROTOCOL,
             "time_basis": TIME_BASIS,
             "dependency_window_batches": self._dependency_window_batches,
@@ -2609,6 +2779,7 @@ class SimulationSession:
                 "hbf_buffer_hbm_bytes": self._hbf_buffer_hbm_bytes,
                 "host_memory_model": "hbm-reserved-shared-data-channels",
                 "hbf_mapping_mode": self._hbf_mapping_mode,
+                "hbf_mapping_organization": self._system_config.hbf_mapping_organization,
                 "hbf_ctrl_dram_bytes": self._hbf_ctrl_dram_bytes,
                 "hbf_ctrl_dram_capacity_denominator": (
                     0
@@ -2636,8 +2807,12 @@ class SimulationSession:
             },
             "lifecycle_checkpoints": deepcopy(self._checkpoint_receipts),
             "logical_invalidations": deepcopy(self._invalidation_receipts),
+            "peer_memory_setup": deepcopy(getattr(self, '_peer_setup', None)),
             "final_measurement": deepcopy(self._stop_receipt),
         }
+        if self._terminal_failure is not None:
+            receipt["terminal_failure"] = deepcopy(self._terminal_failure)
+        return receipt
 
     def _force_close(self) -> None:
         if getattr(self, "_closed", True):
@@ -2665,13 +2840,18 @@ class SimulationSession:
     def close(self) -> None:
         if self._closed:
             return
-        error: BaseException | None = None
+        # Keep a reference to the exact QUIT response until validation ends.
+        # Successful closes need no second copy of this potentially large row.
+        terminal_lines: list[str] = []
+        stopped: dict[str, Any] | None = None
         try:
             if self._process.poll() is None:
                 assert self._process.stdin is not None
                 self._process.stdin.write("QUIT\n")
                 self._process.stdin.flush()
-                stopped = self._read_response("simulation-session stop receipt")
+                stopped = self._read_response(
+                    "simulation-session stop receipt", raw_response=terminal_lines
+                )
                 if (
                     stopped.get("schema") != SESSION_SCHEMA
                     or stopped.get("result") != "stopped"
@@ -2712,8 +2892,7 @@ class SimulationSession:
                     stopped.get("device_workload_totals"),
                     enable_hbm=self._enable_hbm,
                     enable_hbf=self._enable_hbf,
-                    enable_external=self._enable_external,
-                    enable_host_dram=self._enable_host_dram,
+                    enable_external=self._enable_external, enable_host_dram=self._enable_host_dram,
                     external_kind=(
                         None
                         if self._external_backing is None
@@ -2772,8 +2951,7 @@ class SimulationSession:
                     drain.get("device_delta"),
                     enable_hbm=self._enable_hbm,
                     enable_hbf=self._enable_hbf,
-                    enable_external=self._enable_external,
-                    enable_host_dram=self._enable_host_dram,
+                    enable_external=self._enable_external, enable_host_dram=self._enable_host_dram,
                     external_kind=(
                         None
                         if self._external_backing is None
@@ -2798,11 +2976,27 @@ class SimulationSession:
                     f" (exit={self._process.returncode}){suffix}"
                 )
         except BaseException as caught:
-            error = caught
+            if terminal_lines:
+                import traceback
+
+                self._terminal_failure = {
+                    "schema": {"name": "hbfsim.unvalidated_terminal_response", "version": 1},
+                    "command": "QUIT",
+                    "validated": False,
+                    "validation_status": "failed",
+                    "raw_response": terminal_lines[0],
+                    "decoded_response": deepcopy(stopped),
+                    "simulator_executable": deepcopy(self._simulator_artifact),
+                    "engine_source": deepcopy(self._engine_source),
+                    "exception": {
+                        "type": f"{type(caught).__module__}.{type(caught).__qualname__}",
+                        "message": str(caught),
+                        "traceback": "".join(traceback.format_exception(caught)),
+                    },
+                }
+            raise
         finally:
             self._force_close()
-        if error is not None:
-            raise error
 
     def __enter__(self) -> "SimulationSession":
         return self

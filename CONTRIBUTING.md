@@ -16,6 +16,23 @@ python3 -B tests/test_serveloop.py
 Pass `--simulator /path/to/hbfsim` to the test command when a compatible
 HBFSim build is available.
 
+## Changes that belong in HBFSim
+
+`hbfsim_client/`, `configs/systems/` and `configs/parameter-provenance.json`
+are copies from [HBFSim](https://github.com/FlashLaboratory/HBFSim). Change
+them there first, then copy the files here, update the commit, hashes and
+changed parameters in `configs/ocp-profile-source.json`, and run:
+
+```bash
+python3 -B tests/test_config_compatibility.py \
+  --hbfsim-root ../HBFSim --simulator ../HBFSim/build/hbfsim
+python3 -B tests/test_session_compatibility.py --simulator ../HBFSim/build/hbfsim
+```
+
+If the change alters what ServeLoop sends, also raise
+`HBFSIM_SERVELOOP_MIN_REVISION` in HBFSim's `CMakeLists.txt` and
+`SERVELOOP_REVISION` in its CI workflow.
+
 ## Evidence rules
 
 - Never commit private production traces, credentials, hostnames, usernames,

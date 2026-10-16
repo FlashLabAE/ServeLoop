@@ -213,19 +213,6 @@
         "../overlays/hbf/cached-l2p-1-over-1000.cfg",
         "../overlays/hbf/thermal-steady-state-start.cfg"
       ]
-    },
-    {
-      "id": "0h8f",
-      "label": "0 HBM / 8 HBF",
-      "composition": "0H8F",
-      "integration_mode": "direct_hbm_hbf",
-      "active_hbm_stacks": 0,
-      "active_hbf_stacks": 8,
-      "system_configs": [
-        "../systems/miniquick/eight-stack-baseline.cfg",
-        "../overlays/hbf/cached-l2p-1-over-1000.cfg",
-        "../overlays/hbf/thermal-steady-state-start.cfg"
-      ]
     }
   ],
   "measurement": {

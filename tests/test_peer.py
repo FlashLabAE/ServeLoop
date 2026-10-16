@@ -178,14 +178,14 @@ class PeerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             overlay = Path(directory) / "peer.cfg"
             overlay.write_text("\n".join((
-                "hbm-capacity-bytes=16384", "hbf-stacks=2", "hbf-channels=1", "hbf-dies-per-channel=1",
+                f"hbm-capacity-bytes={262144 + 16384}", "hbf-stacks=2", "hbf-channels=1", "hbf-dies-per-channel=1",
                 "hbf-planes-per-die=2", "hbf-blocks-per-plane=32", "hbf-pages-per-block=8",
                 "hbf-page-size=4096", "hbf-gc-low-watermark-pages=8", "hbf-gc-hard-watermark-pages=0",
                 "hbf-gc-reserved-free-blocks-per-plane=2", "hbf-write-buffer-pages=16",
                 "hbf-write-buffer-flush-threshold-pages=8", "hbf-mapping-mode=cached",
                 "hbf-ctrl-dram-bytes=262144", "hbf-thermal-enable=false", "",
             )))
-            config = ResolvedSystemConfig.load((ROOT / "configs/4hbm-4hbf.cfg", overlay)).resolve(self.simulator)
+            config = ResolvedSystemConfig.load((ROOT / "configs/systems/4hbm-4hbf.cfg", overlay)).resolve(self.simulator)
             trace = [access_batch(0, [("R", 0, 4096), ("W", 8192, 4096), ("W", 12288, 4096)]),
                      access_batch(1, [("W", 16384, 4096), ("W", 20480, 4096)])]
             trace.extend(access_batch(batch_id, [("R", 24576, 4096)]) for batch_id in range(2, 14))
@@ -201,8 +201,10 @@ class PeerTests(unittest.TestCase):
                                   hbf_geometry=config.hbf_geometry,
                                   hbf_logical_capacity_bytes=config.logical_hbf_capacity_bytes)
                 preflight = mapper.preflight(selected_trace)
+                # hbm_bytes is application capacity; HBFSim also reserves the controller buffers in HBM.
                 session = SimulationSession(simulator_path=self.simulator, system_config=config,
-                                            enable_hbm=True, enable_hbf=True, hbm_capacity_bytes=hbm_bytes,
+                                            enable_hbm=True, enable_hbf=True,
+                                            hbm_capacity_bytes=config.hbf_buffer_hbm_bytes + hbm_bytes,
                                             initial_hbf_logical_first_lpn=mapper.initial_hbf_logical_first_lpn,
                                             initial_hbf_logical_pages=mapper.initial_hbf_logical_pages)
                 completions = []

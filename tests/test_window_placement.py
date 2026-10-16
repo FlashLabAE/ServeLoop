@@ -25,12 +25,13 @@ class PlacementTests(unittest.TestCase):
         self.directory = Path(self.temporary.name)
         self.path = tiny_experiment(self.directory)
         self.context = load_experiment_context(self.path)
-        self.geometry = self.context.topologies[-1].system_config.hbf_geometry
+        topology = next(row for row in self.context.topologies if row.id == "2h6f")
+        self.geometry = topology.system_config.hbf_geometry
 
     def remapper(self, capacity, priority):
         return DirectAttachedRemapper(
             address_space_bytes=25 * 4096, hbm_capacity_bytes=capacity,
-            hbf_geometry=self.geometry, hbm_stacks=2, hbf_stacks=8,
+            hbf_geometry=self.geometry, hbm_stacks=2, hbf_stacks=6,
             placement_granularity_bytes=8192, hbm_priority_units=priority,
         )
 

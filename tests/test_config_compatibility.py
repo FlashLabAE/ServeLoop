@@ -62,8 +62,7 @@ class ConfigurationCompatibility(unittest.TestCase):
                 paths = [(path.parent / p).resolve() for p in topology['system_configs']]
                 with self.subTest(experiment=path.name, topology=topology['id']):
                     self.assertTrue(all(p.is_file() for p in paths))
-                    # 0h8f remains unsupported by the controller-HBM contract;
-                    # parsing does not certify that topology can execute.
+                    # Parsing does not certify that the topology can execute.
                     ResolvedSystemConfig.load(paths).resolve(SIMULATOR, enable_hbf=True)
 
 

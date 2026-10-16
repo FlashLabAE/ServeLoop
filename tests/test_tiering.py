@@ -15,14 +15,17 @@ from test_windows import tiny_experiment
 from serveloop.windows.experiment import (
     build_preflight, execute_topology, load_experiment_context, new_remapper,
 )
+from hbfsim_client.simulation_session import ResolvedSystemConfig
 
 
 def tiered_experiment(directory):
     path = tiny_experiment(directory)
     experiment = json.loads(path.read_text())
     base = next(row for row in experiment["topologies"] if row["id"] == "6h2f")
+    # Leave 64 KiB of HBM for the cache after HBFSim reserves the HBF controller buffers.
+    controller = ResolvedSystemConfig.load([Path(p) for p in base["system_configs"]]).hbf_buffer_hbm_bytes
     overlay = directory / "cache.cfg"
-    overlay.write_text("hbm-capacity-bytes=65536\n")
+    overlay.write_text(f"hbm-capacity-bytes={controller + 65536}\n")
     experiment["topologies"] = []
     for policy in ("address_only_lru", "decayed_lfu", "threshold_promotion", "class_aware"):
         row = deepcopy(base)

@@ -13,8 +13,15 @@ import unittest
 from serveloop.sglang.requests import (
     bind_request_ids, encode_trace, load_requests, request_stats_on_input_clock, validate_request_stats,
 )
-from workloads.production_request_trace.canonical import ProductionTrace, RECORD_SCHEMA, publish_trace
-from workloads.production_request_trace.registry import load_source_spec
+try:
+    from workloads.production_request_trace.canonical import ProductionTrace, RECORD_SCHEMA, publish_trace
+    from workloads.production_request_trace.registry import load_source_spec
+except ModuleNotFoundError as error:
+    if error.name is None or not error.name.startswith("workloads"):
+        raise
+    WORKLOADS_MISSING = "needs HBFSim's workloads.production_request_trace, which the public HBFSim does not ship"
+else:
+    WORKLOADS_MISSING = None
 
 
 def fixture(block=16, *, synthetic=False):
@@ -36,6 +43,7 @@ def common_tokens(left, right):
     return next((i for i, (a, b) in enumerate(zip(left, right)) if a != b), min(len(left), len(right)))
 
 
+@unittest.skipIf(WORKLOADS_MISSING, WORKLOADS_MISSING)
 class TraceInputTests(unittest.TestCase):
     def test_exact_block_prefixes_for_both_sources_and_partial_tails(self):
         for block in (16, 512):

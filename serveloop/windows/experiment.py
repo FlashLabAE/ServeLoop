@@ -345,6 +345,11 @@ def load_experiment_context(
             _fail(f"topology {plan.id} does not occupy the declared fixed slots")
         if plan.hbm_stacks and config.integer("hbm-stacks") != plan.hbm_stacks:
             _fail(f"topology {plan.id} HBM stack count differs from its device configuration")
+        if plan.hbf_stacks and not plan.hbm_stacks and config.hbf_buffer_hbm_bytes:
+            _fail(
+                f"topology {plan.id} has HBF stacks but no HBM; HBFSim reserves "
+                "the HBF controller buffers in HBM, so it cannot execute"
+            )
         if plan.integration_mode == "hbm_fronted_external":
             identity = config.external_backing_identity
             if (

@@ -26,7 +26,7 @@ from serveloop.public_model import (
     derive_public_model_capacity_inputs,
     derive_public_model_ledger,
 )
-from serveloop.windows.experiment import load_experiment_context
+from serveloop.windows.experiment import FixedFootprintExperimentError, load_experiment_context
 
 
 def logical_trace_digest(trace) -> str:
@@ -117,7 +117,7 @@ class WindowTests(unittest.TestCase):
                 trace = context.trace
                 actual = (len(trace.phases), trace.read_bytes, trace.write_bytes, logical_trace_digest(trace))
                 self.assertEqual(actual, expected)
-                self.assertEqual(len(context.topologies), 8 if name == "miniquick-serving" else 7)
+                self.assertEqual(len(context.topologies), 7 if name == "miniquick-serving" else 6)
 
     def test_70b_ledger_preserves_per_channel_scales_and_matrix_embeddings(self) -> None:
         ledger = derive_public_model_capacity_inputs(ROOT / "models/llama31-70b-w8a16-kv-bf16.json")
@@ -188,6 +188,18 @@ class WindowTests(unittest.TestCase):
             self.assertIsNone(result["source"]["simulator"])
             self.assertNotIn("reference_topology_results", result)
 
+    def test_zero_hbm_hbf_topology_is_rejected_before_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = tiny_experiment(Path(directory))
+            experiment = load_json_object(path, "experiment")
+            row = next(row for row in experiment["topologies"] if row["id"] == "2h6f")
+            row.update(id="0h8f", label="0 HBM / 8 HBF", composition="0H8F",
+                       active_hbm_stacks=0, active_hbf_stacks=8)
+            row["system_configs"][0] = str(ROOT / "configs/systems/miniquick/eight-stack-baseline.cfg")
+            path.write_text(json.dumps(experiment))
+            with self.assertRaisesRegex(FixedFootprintExperimentError, "has HBF stacks but no HBM"):
+                load_experiment_context(path)
+
 
 class PhysicalWindowTests(unittest.TestCase):
     simulator: Path | None = None
@@ -200,13 +212,13 @@ class PhysicalWindowTests(unittest.TestCase):
             experiment = tiny_experiment(root)
             self.assertEqual(main([
                 "run", "--experiment", str(experiment), "--simulator", str(self.simulator),
-                "--topologies", "all-hbm,0h8f,8h0f-dram", "--allow-dirty", "--out", str(root / "out"),
+                "--topologies", "all-hbm,2h6f,8h0f-dram", "--allow-dirty", "--out", str(root / "out"),
             ]), 0)
             result_path, = (root / "out").glob("*/result.json")
             result = load_json_object(result_path, "run")
             self.assertEqual(result["execution_mode"], "fixed_window")
             rows = result["reference_topology_results"]
-            self.assertEqual([row["id"] for row in rows], ["all-hbm", "0h8f", "8h0f-dram"])
+            self.assertEqual([row["id"] for row in rows], ["all-hbm", "2h6f", "8h0f-dram"])
             for row in rows:
                 self.assertEqual(row["trace_sha256"], result["trace"]["trace_sha256"])
                 self.assertGreater(row["metrics"]["final_drain_time_ns"], 0)

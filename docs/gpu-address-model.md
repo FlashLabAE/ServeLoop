@@ -82,9 +82,8 @@ Slurm job 263472; the implementation was frozen before inspecting their
 results. At this update those results are not yet retrieved because SSH times out. No held-out success is
 claimed.
 
-The HBFSim companion repository contains the comparator and frozen hashes in
-`evidence/hardware/gpu_operators/`, plus integration tests in
-`tests/python/test_gpu_address_generator.py`. These test partial tiles,
+The comparator, frozen hashes and integration tests are not part of the
+public HBFSim repository. They test partial tiles,
 K/V append, real shared/fragmented mappings, native HBM execution, migration
 and direct HBF execution. The paper adapter now tracks disjoint initialized
 K/V ranges, so cache fills and writeback exclude the gap between partial

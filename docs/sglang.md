@@ -96,8 +96,9 @@ GPU kernel layout.
 ## Requests and execution
 
 Run the commands below from the HBFSim checkout, with both repositories on
-`PYTHONPATH`. System profiles are explicitly selected from ServeLoop; they target
-HBFSim `60e3f66` (see [configuration compatibility](configuration.md)).
+`PYTHONPATH`. The system profiles are selected from ServeLoop's
+`configs/systems/`, which are copies of HBFSim's profiles of the same names
+(see [configuration compatibility](configuration.md)).
 
 Each JSONL row contains integer `arrival_ns`, nonempty `token_ids`, and positive
 `output_tokens`. Arrival times must be nondecreasing. Shared token prefixes
@@ -122,7 +123,9 @@ python -m serveloop.sglang run \
 ### Bailian and Mooncake inputs
 
 The same `run --requests` accepts a canonical bundle directory produced by
-HBFSim's `workloads.production_request_trace` importer. To read a raw published
+HBFSim's `workloads.production_request_trace` importer. That importer is not
+part of the public HBFSim repository, so this subsection and
+`tests/test_sglang_requests.py` need a checkout that provides it. To read a raw published
 file directly, add `--trace-source-id`: this reuses that importer's pinned
 source verification, time-unit conversion and session metadata. Raw slices
 are not complete published files; select a slice with `--trace-start` and

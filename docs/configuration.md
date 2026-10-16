@@ -4,34 +4,46 @@ The checked-in system configurations are exploratory simulator profiles, not
 vendor performance guarantees. They are included so users can exercise
 placement and protocol behavior with a compatible HBFSim build.
 
-The system profiles and bundled `hbfsim_client` were synchronized with HBFSim
-on 2026-09-17. They use its current OCP HBF v0.7.0 / HBM4 configuration and
-simulation-session contracts. Removed subarray,
-separate program-verification, arbitrary HBIO-bandwidth, page-run acceleration
-and read-buffer options are not accepted by the current engine. Use the current
-profiles with a current HBFSim binary; do not reuse those removed options as
-compatibility overlays. Original frozen runs retain their original profiles.
+## Relationship to HBFSim
 
-`4hbm-4hbf.cfg` and its `-miniquick` variant combine a four-stack HBM domain
-with four HBF stacks. Link rates, queue depths, controller timing, flash-media
-timing, overprovisioning, and thermal parameters are modeling assumptions. The
-mini profile reduces capacity and host work for fast integration tests; it is
-not a smaller hardware product claim.
+HBFSim owns the hardware model, its profiles and its client protocol. Three
+parts of this repository are verbatim copies of the same paths in
+[HBFSim](https://github.com/FlashLaboratory/HBFSim):
 
-`eight-stack-baseline.cfg`, `simulation-session-mini.cfg`, `cxl-memory.cfg`,
-and `nvme-ssd.cfg` exercise the baseline HBM domain, persistent session
-protocol, and external backing alternatives.
+- `configs/systems/` (complete system profiles),
+- `configs/parameter-provenance.json` (source and evidence grade of every
+  physical default), and
+- `hbfsim_client/` (the persistent-session client).
 
-`windows/` contains matched miniquick/full-scale experiments. Its paths resolve
-relative to each experiment JSON. `systems/` and `overlays/` provide their full
-topology matrix, capacity controls, and thermal assumptions. The original flat
-profiles remain small request-serving examples; they are not alternate workload
-generators. See [Fixed windows](windows.md) for scale and completion boundaries.
+They currently match HBFSim `0e46ac0`. Because the relative paths are the same
+in both repositories, `--system configs/systems/miniquick/4hbm-4hbf.cfg`
+selects the same profile whether a command runs from ServeLoop or from HBFSim.
+`configs/ocp-profile-source.json` records the HBFSim commit, the SHA-256 of
+each copied profile and of the provenance registry, and every parameter the
+latest synchronization changed.
+
+`systems/4hbm-4hbf.cfg`, `systems/2hbm-6hbf.cfg` and `systems/6hbm-2hbf.cfg`
+split eight package positions between HBM and HBF stacks.
+`systems/eight-stack-baseline.cfg` declares eight HBM and eight HBF stacks and
+is the base profile of the fixed-window experiments. Link rates,
+queue depths, controller timing, flash-media timing, overprovisioning, and
+thermal parameters are modeling assumptions. The `systems/miniquick/` variants
+reduce capacity and host work for fast integration tests; they are not smaller
+hardware product claims. `systems/sglang-small.cfg` is a tiny overlay for the
+native SGLang frontend.
+
+The remaining files are ServeLoop's own. `simulation-session-mini.cfg`,
+`cxl-memory.cfg` and `nvme-ssd.cfg` exercise the persistent session protocol
+and external backing alternatives. `windows/` contains matched
+miniquick/full-scale experiments; its paths resolve relative to each
+experiment JSON. `overlays/` provides their capacity controls, backing media
+and thermal assumptions. See [Fixed windows](windows.md) for scale and
+completion boundaries.
 
 The `overlays/backing/calibrated/dana-a100-*` coefficients are inherited from
-HBFSim's A100 host-offload fits, not portable DRAM/NVMe specifications. The
-upstream raw measurements and validation receipts are not shipped here. This
-standalone package therefore treats them as example parameterizations, not
+HBFSim's A100 host-offload fits, not portable DRAM/NVMe specifications. HBFSim
+publishes the fit under `evidence/hardware/dana_a100_offload/`; it is not
+copied here. Treat the overlays as example parameterizations, not
 self-contained calibration evidence; validate or replace them for your setup.
 
 For publishable results, freeze the complete config set, hash it in the run
@@ -49,9 +61,10 @@ sufficient HBM runtime scratch. The provider reports the profile hash and
 measured validation errors in the result; `calibrated` does not imply a
 production SLO guarantee.
 
-The corresponding profile/evidence lives in the sibling HBFSim repository at
-`evidence/hardware/gpu_operators/`. The v3 runtime rejects old contiguous-KV v2
-profiles. Its native client requires dynamic memory-span barrier support.
+No measured operator profile is distributed with ServeLoop or with the public
+HBFSim repository; supply one measured on your own hardware. The v3 runtime
+rejects old contiguous-KV v2 profiles. Its native client requires dynamic
+memory-span barrier support.
 
 Scheduler semantics match the tested vLLM 0.26.0 synchronous FCFS configuration:
 running requests (including unfinished prefills) in admission order, then
@@ -61,92 +74,53 @@ suffixes first, and active entries remain protected during capacity eviction.
 This does not claim vLLM async scheduling, speculative decoding, full-prompt
 reservation, TP/EP or every scheduler version.
 
-## Backend compatibility and OCP migration
+## Backend compatibility
 
-Current compatibility target: HBFSim **60e3f6669c49a7e8c0a0bd299955de2527ec6a70**.
-The profiles were sourced from **2a59b7f13461356d33c00ad1f25fdee4e0bf7fb1**;
-their recorded source values are unchanged at the current target. The original
-profile source hashes and migration inventory remain intact.
-The ServeLoop base revision **3a6b9a5** shipped older vendor-target profiles that
-fail with this backend. This change adopts the corresponding HBFSim OCP v0.7.0
-Grade 2 profiles, rather than attempting to reproduce the obsolete model.
-`configs/ocp-profile-source.json` records source hashes and **every changed,
-added or removed parameter in each of the 11 complete profiles, plus the mini session overlay**. The copied
-`configs/parameter-provenance.json` gives upstream evidence and assumption
-labels. These are source identities, not hardware validation receipts.
+Supported backend: HBFSim `0e46ac0d073bab5df3c9e7e7ecbfac42e3756b6f`.
+In the other direction, HBFSim's integration tests accept ServeLoop at or after
+`HBFSIM_SERVELOOP_MIN_REVISION` in its `CMakeLists.txt`.
 
-| Parameter | Previous profile | Current profile / meaning |
-| --- | --- | --- |
-| HBF channels × dies/channel × banks/die | 4 × 4 × 4 | 16 × 1 × 16; 256 banks/stack |
-| Blocks/bank (full; mini) | 8192; 800 | 2048; 200, preserving 512; 50 GiB raw/stack |
-| `hbf-subarrays-per-plane` | 32 | Removed; backend has one ordered sense resource/bank |
-| Media lanes; page-buffer banks/bank | 16; 16 | 1; 2 |
-| Read; program latency (ns) | 1000; 95000 | 4000; 75000, upstream assumptions |
-| `hbf-program-verify-ns` | 5000 | Removed; no separate configurable verify stage |
-| `hbf-hbio-bw` | 1600 GB/s | Removed; interface derived from explicit speed grade 2 |
-| ECC decode/encode raw rate | 105.46875 | 101.25 GB/s |
-| Channel; TSV rate | 421.875; 1712.5 | 101.25; 1644 GB/s |
-| `hbf-page-run-acceleration` | true | Removed obsolete execution switch; no replacement key |
-| `hbf-read-buffer-pages` (session mini overlay) | 16 | Removed; backend owns two decoded pages per bank |
-| HBM pin rate | 9.6 Gb/s | 8 Gb/s (2048 GB/s/stack), upstream baseline |
-| Standards | implicit | Explicit OCP-HBF-0.7.0-2026-08-03 and JEDEC-JESD270-4-2025-04 |
+A client and an engine from different HBFSim revisions are not
+interchangeable: the client validates receipt fields (transaction census,
+host-DRAM and external accounting, wear snapshots, resolved geometry) that
+change together with the engine. Running from the ServeLoop directory selects
+the bundled client; running from an HBFSim checkout selects HBFSim's. At the
+supported revision the two are identical.
 
-The above are **physical model changes**, not equivalent key renames. Other
-values, including stack counts, capacities, thermal assumptions and write-buffer
-policy, retain the corresponding profile values. Miniquick changes capacity only
-relative to the *new* full profile; it does not retain old-model timing.
-`host-hbf-dram-bandwidth-gbps` is also obsolete, but was already absent from the
-3a6b9a5 source configs. Controller storage/service follows the selected backend's
-HBM contract; this migration does not restore a private controller DRAM model.
+The latest synchronization replaced HBM per-command timing with HBFSim's
+aggregate channel model. The engine rejects the removed keys. This is a
+physical model change, not a key rename, so HBM timing simulated with the
+previous profiles is not reproduced. HBF, capacity, thermal and backing values
+are unchanged.
 
-| Pair / entry | Startup status | Physical equivalence |
-| --- | --- | --- |
-| ServeLoop 3a6b9a5 original profiles + HBFSim 60e3f66 | Rejected (obsolete keys) | No |
-| Migrated profiles + updated bundled or target external client + HBFSim 60e3f66 | Bounded config/session tests pass | Not equivalent to original profiles |
-| Migrated profiles + bundled client from 6f5a94e + HBFSim 60e3f66 | New transaction census, tier accounting and wear-v2 receipts rejected | Previous protocol fix needs this update |
-| Migrated profiles + historical HBFSim versions | Not certified; pin matching source/configs | Not assumed |
-| Historical results + original binary/config/trace | Retained evidence, not rerun here | Unchanged files; original scope only |
-| Zero-HBM `0h8f` execution | Still unsupported by controller-HBM contract | Not repaired by this change |
+- Removed: `hbm-tccd-s-cycles`, `hbm-tccd-l-cycles`, `hbm-tcl-ns`,
+  `hbm-tcwl-ns`, `hbm-tfaw-ns`, `hbm-tras-ns`, `hbm-trc-ns`, `hbm-trcdrd-ns`,
+  `hbm-trcdwr-ns`, `hbm-trp-ns`, `hbm-trrd-s-ns`, `hbm-trrd-l-ns`,
+  `hbm-trtp-ns`, `hbm-trtw-ns`, `hbm-twr-ns`, `hbm-twtr-s-ns`,
+  `hbm-twtr-l-ns`, `hbm-refresh`, `hbm-same-bank-refresh`, `hbm-trefi-ns`,
+  `hbm-trfc-ns`, `hbm-trfcsb-ns`, `hbm-trrefd-ns`.
+- Added: `hbm-read-latency-ns=42`, `hbm-write-latency-ns=38`,
+  `hbm-read-to-write-ns=8`, `hbm-write-to-read-ns=8`,
+  `hbm-bandwidth-efficiency=0.94` (average command and refresh overhead),
+  `hbm-service-group-channels=4`, `hbm-service-quantum-bytes=4096`.
 
-Flat serving profiles and `systems/` profiles now select identical values for
-matching shapes. SGLang examples explicitly select ServeLoop's `systems/` base
-and `sglang-small.cfg` overlay; commands in `docs/sglang.md` run from HBFSim.
-The native coarse path remains the default. No simulator or serving algorithm
-is changed. The bundled Python simulation-session client is updated to the
-selected backend contract: scalar read receipts with conservation checks,
-`pending_block_transitions`, `raw-physical` mapping, resolved HBM burst and
-controller buffer reservations (including scratch/GC), zone-managed image
-validation, and logical page invalidation / wear-output hooks needed by SGLang. The old bundled
-client rejects the new read receipt even after every config is fixed. Running
-from the ServeLoop directory selects this bundled client ahead of PYTHONPATH;
-therefore configuration-only changes do not fix standalone ServeLoop. No legacy
-field fallback or old physical model is reintroduced.
-
-The current backend also emits a `HOST_DRAM` transaction census and an explicit
-`host_dram` accounting slot, including zero/null entries when CPU DRAM is disabled.
-The bundled client validates these fields on completion, invalidation, checkpoint,
-crash and close, and accepts an explicit `host_dram_config` attachment. Host DRAM
-and external backing retain separate transaction, page-run and transport accounting.
-This client interface does not add a new serving placement policy.
-
-Wear snapshots use schema v2: per-block erase counts must agree with physical
-state totals and verified accounting, and the pending-work counters must agree
-with the quiescence flag. Observing a snapshot allows pending writes and does
-not implicitly drain them. The previous client/schema is not accepted as an
-equivalent fallback. The supported backend is the explicit commit above.
+HBFSim reserves the HBF controller buffers in HBM, so a fixed-window topology
+with HBF stacks but no HBM cannot execute; the experiment loader rejects it
+before any simulation starts.
 
 Run the focused checks with explicit paths (no editable install required):
 
 ```sh
 python tests/test_config_compatibility.py \
   --hbfsim-root /path/to/HBFSim --simulator /path/to/hbfsim
+python tests/test_config_compatibility.py --client external \
+  --hbfsim-root /path/to/HBFSim --simulator /path/to/hbfsim
 python -B tests/test_session_compatibility.py --simulator /path/to/hbfsim
 ```
 
 Without `--simulator`, the session suite runs portable receipt acceptance and
 corruption checks in CI; native HBM-only, Host-DRAM/NVMe coexistence and pending
-wear/checkpoint tests require the explicit executable. Local compatibility
-validation runs with both the bundled and target HBFSim clients.
+wear/checkpoint tests require the explicit executable.
 
 These checks verify config acceptance, profile provenance values, capacity
 invariants and window config composition. Synthetic session checks only certify
@@ -154,8 +128,6 @@ software wiring. They do not validate inference performance, GPU cache accuracy,
 phase-specific hardware errors, or a new model/context. Freeze new configurations
 for any rerun; simulated time, traffic and placement may change, and old fits,
 calibration coefficients and reported errors must not automatically carry over.
-Do not rewrite historical experiment JSON, configs, manifests or results.
-
 
 ## MoE prefix routing identity
 
@@ -172,7 +144,8 @@ also include the relevant expert decisions; identical tokens alone are
 insufficient. Providers without this contract still cannot enable MoE prefix
 caching. Placement checks that each compiled batch uses the same router digest
 and records `prefix_router_sha256` in its receipt.
-# Optional operator coverage
+
+## Optional operator coverage
 
 The coarse memory-only path can load `--coarse-coverage-profile FILE`; the
 original weight/KV path remains default. See [coverage scope and cache

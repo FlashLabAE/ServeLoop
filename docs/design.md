@@ -171,7 +171,7 @@ serveloop generate --config examples/quickstart-requests.json \
 serveloop run \
   --simulator /path/to/HBFSim/build/hbfsim \
   --model models/llama31-8b-w8-kv-bf16.json \
-  --system configs/4hbm-4hbf-miniquick.cfg \
+  --system configs/systems/miniquick/4hbm-4hbf.cfg \
   --requests examples/quickstart-requests.json \
   --placement weights-hbf-kv-hbm \
   --out out/quickstart

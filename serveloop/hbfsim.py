@@ -6,8 +6,10 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
+import subprocess
 from typing import Any, Callable, Mapping, Sequence
 
+import hbfsim_client
 from hbfsim_client.simulation_session import (
     SimulationSession,
     SimulationSessionError,
@@ -22,6 +24,42 @@ from serveloop.contracts import (
 )
 from serveloop.engine import BatchExecution
 from serveloop.placement import ServeLoopPlacement
+
+# HBFSim commit that hbfsim_client/ and configs/systems/ were copied from;
+# configs/ocp-profile-source.json records the same commit.
+BUNDLED_HBFSIM_COMMIT = "0e46ac0d073bab5df3c9e7e7ecbfac42e3756b6f"
+
+
+def describe_backend(simulator_path: Path | None) -> str:
+    """Name the client and engine that met, for a failed session's message."""
+
+    client = Path(hbfsim_client.__file__).resolve().parent
+    bundled = client.parent == Path(__file__).resolve().parents[1]
+    lines = [
+        f"  hbfsim_client: {client}"
+        + (f" (bundled copy of HBFSim {BUNDLED_HBFSIM_COMMIT[:7]})" if bundled else "")
+    ]
+    if simulator_path is not None:
+        try:
+            completed = subprocess.run(
+                [str(simulator_path), "--version"],
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            output = completed.stdout.strip()
+            version = (
+                output.splitlines()[0]
+                if completed.returncode == 0 and output
+                else f"--version exited with {completed.returncode}"
+            )
+        except (OSError, subprocess.SubprocessError) as error:
+            version = f"not runnable ({error})"
+        lines.append(f"  simulator: {simulator_path}: {version}")
+    lines.append(
+        "  Receipt and configuration-key errors usually mean that the client, the "
+        "system profiles and the simulator come from different HBFSim revisions; "
+        "see docs/configuration.md#backend-compatibility."
+    )
+    return "\n".join(lines)
 
 
 class HbfSimExecutor:

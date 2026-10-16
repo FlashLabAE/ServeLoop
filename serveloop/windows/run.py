@@ -9,6 +9,7 @@ from hbfsim_client.fixed_footprint_metrics import FixedFootprintMetricsError
 from hbfsim_client.provenance import gate_provenance, stamp_result
 from hbfsim_client.simulation_session import SimulationSessionError
 from serveloop.contracts import ServeLoopError
+from serveloop.hbfsim import describe_backend
 from serveloop.io import create_run_directory, load_json_object, write_json_atomic
 from serveloop.public_model import PublicModelDescriptorError
 from serveloop.windows.experiment import (
@@ -86,6 +87,8 @@ def run_window(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int
         SimulationSessionError,
     ) as error:
         print(f"serveloop fixed-window run failed: {error}", file=sys.stderr)
+        if isinstance(error, SimulationSessionError):
+            print(describe_backend(args.simulator), file=sys.stderr)
         return 2
     print("\n".join(lines))
     return 0

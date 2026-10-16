@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 from copy import deepcopy
 import io
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -19,6 +20,7 @@ from hbfsim_client.simulation_session import (
     _validate_device_accounting,
 )
 from hbfsim_client.transaction_protocol import Transaction
+from serveloop.hbfsim import BUNDLED_HBFSIM_COMMIT, describe_backend
 
 SIMULATOR = None
 
@@ -122,6 +124,18 @@ class ReceiptContractTests(unittest.TestCase):
                     del value["device_workload_totals"]["host_dram"]
                 with self.assertRaises(SimulationSessionError):
                     snapshot_from_receipt(value)
+
+
+class BackendDescriptionTests(unittest.TestCase):
+    def test_bundled_commit_matches_profile_source(self):
+        source = json.loads((ROOT / "configs/ocp-profile-source.json").read_text())
+        self.assertEqual(BUNDLED_HBFSIM_COMMIT, source["commit"])
+
+    def test_failed_session_names_client_and_simulator(self):
+        description = describe_backend(ROOT / "missing-hbfsim")
+        self.assertIn("hbfsim_client: ", description)
+        self.assertIn("missing-hbfsim: not runnable", description)
+        self.assertIn("different HBFSim revisions", description)
 
 
 class NativeSessionTests(unittest.TestCase):

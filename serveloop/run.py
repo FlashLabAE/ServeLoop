@@ -38,7 +38,7 @@ from serveloop.contracts import (  # noqa: E402
     canonical_sha256,
 )
 from serveloop.engine import ServeLoopEngine  # noqa: E402
-from serveloop.hbfsim import HbfSimExecutor  # noqa: E402
+from serveloop.hbfsim import HbfSimExecutor, describe_backend  # noqa: E402
 from serveloop.io import (  # noqa: E402
     REQUEST_TRACE_SCHEMA,
     RUN_CONFIG_SCHEMA,
@@ -788,6 +788,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     except (OSError, ServeLoopError, SimulationSessionError) as error:
         print(f"serveloop run failed: {error}", file=sys.stderr)
+        if isinstance(error, SimulationSessionError):
+            print(describe_backend(args.simulator), file=sys.stderr)
         return 2
     print("\n".join(lines))
     return 0

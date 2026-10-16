@@ -15,6 +15,14 @@ native SGLang scheduling and slot allocation with its own physical mapper.
 controlled topology comparisons without request scheduling or compute timing.
 """
 
+import sys
+
+if sys.version_info < (3, 10):
+    raise SystemExit(
+        f"ServeLoop requires Python 3.10 or newer; {sys.executable} is "
+        f"Python {sys.version.split()[0]}."
+    )
+
 from serveloop.compiler import ServeLoopCompiler
 from serveloop.contracts import (
     BatchSlice,

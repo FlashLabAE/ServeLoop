@@ -35,6 +35,7 @@ from serveloop.contracts import (
     ModelSpec,
     RequestSpec,
     RouterProvider,
+    ScheduledBatch,
     ServeLoopError,
     canonical_sha256,
 )
@@ -886,13 +887,7 @@ class ServeLoopPlacement:
             request=request, model=model, order=self._next_order
         )
         if self.spec.prefix_cache_bytes and request.token_ids is not None:
-            if model.model_id in self._moe_models:
-                state.prefix_keys = self.router.prefix_block_keys(
-                    request=request, model=model, block_tokens=self.spec.kv_block_tokens)
-                if len(state.prefix_keys) != request.prompt_tokens // self.spec.kv_block_tokens:
-                    raise ServeLoopError('router must identify every complete prompt block')
-            else:
-                state.prefix_keys = block_keys(request, self._model_digests[model.model_id], self.spec.kv_block_tokens)
+            state.prefix_keys = self.prefix_keys_for(request)
             entries = self._prefix.lookup(state.prefix_keys, (request.prompt_tokens - 1) // self.spec.kv_block_tokens,
                                           self.spec.kv_block_tokens, now_ns)
             if entries:
@@ -902,15 +897,175 @@ class ServeLoopPlacement:
         self._next_order += 1
         return state.prefix_hit_tokens
 
-    def complete_batch(self, batch: CanonicalServingBatch, finish_ns: float) -> None:
-        if not self.spec.prefix_cache_bytes:
-            return
-        for item in batch.schedule.slices:
-            state = self._state(item.request_id)
-            if state.tier != KV_HOT_TIER:
-                continue  # PrefixCache owns HBM block IDs, never HBF IDs.
+    def prefix_keys_for(self, request: RequestSpec) -> tuple[str, ...]:
+        """The content keys of the request's complete prompt blocks, as the prefix cache names them."""
+        try:
+            model = self.models[request.model_id]
+        except KeyError as error:
+            raise ServeLoopError(f"request names an unknown model {request.model_id}") from error
+        if model.model_id in self._moe_models:
+            keys = self.router.prefix_block_keys(
+                request=request, model=model, block_tokens=self.spec.kv_block_tokens)
+            if len(keys) != request.prompt_tokens // self.spec.kv_block_tokens:
+                raise ServeLoopError('router must identify every complete prompt block')
+            return tuple(keys)
+        return block_keys(request, self._model_digests[model.model_id], self.spec.kv_block_tokens)
+
+    def complete_batch(self, schedule: ScheduledBatch, finish_ns: float) -> None:
+        """Publish the iteration's completed prompt blocks; the batch is no longer pending."""
+        if self._pending_batch_id == schedule.batch_id:
+            self._pending_batch_id = None
+        for item in schedule.slices:
+            self._publish_complete(self._state(item.request_id), item.token_end, finish_ns)
+
+    def discard_unmapped(self, batch_id: int) -> None:
+        """Forget the transfers a reservation planned, for a replay that never maps its batches.
+
+        The requests' KV homes already moved when the reservation migrated
+        them; only the transactions that would have carried the bytes are
+        dropped, together with the pending batch id.
+        """
+        if self._pending_batch_id != batch_id:
+            raise ServeLoopError(f"no reservation of batch {batch_id} is pending")
+        self._pending_batch_id = None
+        self._pending_migrations = []
+
+    def _publish_complete(self, state: _RequestKv, token_end: int, finish_ns: float) -> None:
+        if self.spec.prefix_cache_bytes and state.tier == KV_HOT_TIER:
+            # PrefixCache owns HBM block IDs, never HBF IDs.
             self._prefix.publish(state.prefix_keys, state.blocks,
-                                 min(item.token_end, state.request.prompt_tokens) // self.spec.kv_block_tokens, finish_ns)
+                                 min(token_end, state.request.prompt_tokens) // self.spec.kv_block_tokens, finish_ns)
+
+    def _publish_pending(self, state: _RequestKv, token_end: int) -> None:
+        if self.spec.prefix_cache_bytes and state.tier == KV_HOT_TIER:
+            # The synchronous batch cannot be revised after reservation.
+            # Its append operations precede every attention read, so a
+            # later admission may reuse these not-yet-executed blocks.
+            self._prefix.publish(state.prefix_keys, state.blocks,
+                                 min(token_end, state.request.prompt_tokens) // self.spec.kv_block_tokens,
+                                 max(0.0, state.request.arrival_ns), pending=True)
+
+    def _grow(self, state: _RequestKv, token_end: int) -> int:
+        """Allocate the blocks ``token_end`` needs beyond the table; returns the blocks allocated."""
+        grow = max(0, self._blocks_per_layer_for(token_end) - state.blocks_per_layer)
+        if not grow:
+            return 0
+        if not state.blocks:
+            state.blocks = [[] for _ in range(state.model.num_layers)]
+        pool = self._cold if state.tier == "hbf" else self._hot
+        assert pool is not None
+        for layer_blocks in state.blocks:
+            layer_blocks.extend(pool.allocate(grow))
+        return grow * state.model.num_layers
+
+    def advance_decode(
+        self,
+        slices: Sequence[BatchSlice],
+        iterations: int,
+        *,
+        batch_id: int,
+        first_finish_ns: float,
+        iteration_ns: float,
+    ) -> int:
+        """Reserve and publish up to ``iterations`` further decode iterations of ``slices``.
+
+        Iteration ``i`` (from 1) is ``slices`` shifted by ``i`` tokens, with
+        batch id ``batch_id + i - 1`` and finish ``first_finish_ns + (i - 1)
+        * iteration_ns``. An iteration is applied only when it allocates
+        from free blocks alone: one whose growth exceeds the free blocks of
+        a request's pool, or at which a prefix entry expires, is left to
+        ``reserve``, so eviction, migration and preemption keep their one
+        implementation. Publishing an iteration's prompt blocks reorders
+        the cache without changing its contents once every key is present,
+        and the same publications then reproduce the same order; the first
+        iteration whose publications change nothing but the order therefore
+        settles the cache, and later iterations skip them. Returns the number
+        of iterations applied.
+        """
+        _nonnegative_integer(batch_id, "advance batch id")
+        if self._pending_batch_id is not None:
+            raise ServeLoopError("a reserved iteration is still unmapped")
+        states = [self._state(item.request_id) for item in slices]
+        for item, state in zip(slices, states):
+            if item.phase != "decode":
+                raise ServeLoopError("advance_decode continues decode slices only")
+            if state.tier not in (KV_HOT_TIER, "hbf"):
+                raise ServeLoopError(f"request {item.request_id} is not at a GPU-readable KV home")
+        expiry = self._prefix.earliest_expiry_ns()
+        settled = False
+        applied = 0
+        for i in range(1, iterations + 1):
+            finish_ns = first_finish_ns + (i - 1) * iteration_ns
+            if expiry is not None and expiry <= finish_ns:
+                break
+            hot = cold = 0
+            for item, state in zip(slices, states):
+                grow = max(0, self._blocks_per_layer_for(item.token_end + i) - state.blocks_per_layer)
+                if state.tier == "hbf":
+                    cold += grow * state.model.num_layers
+                else:
+                    hot += grow * state.model.num_layers
+            if hot > self._hot.free_blocks or (
+                cold and (self._cold is None or cold > self._cold.free_blocks)
+            ):
+                break
+            mutations = self._prefix.mutations
+            for item, state in zip(slices, states):
+                self._grow(state, item.token_end + i)
+                if not settled:
+                    self._publish_pending(state, item.token_end + i)
+            if not settled:
+                for item, state in zip(slices, states):
+                    self._publish_complete(state, item.token_end + i, finish_ns)
+                settled = self._prefix.mutations == mutations
+            applied = i
+        for state in states:
+            if applied:
+                state.last_batch_id = batch_id + applied - 1
+        return applied
+
+    def prefix_receipt(self) -> dict[str, Any]:
+        return self._prefix.receipt()
+
+    def retained_prefix(self) -> tuple[tuple[str, tuple[int, ...], float | None], ...]:
+        """The prefix cache's entries, least recently used first: key, one block per layer, expiry."""
+        if any(entry.pending for entry in self._prefix.entries.values()):
+            raise ServeLoopError("the prefix cache holds blocks of an iteration that has not completed")
+        return tuple((key, entry.blocks, entry.expires_ns) for key, entry in self._prefix.entries.items())
+
+    def request_blocks(self, request_id: str) -> tuple[str, tuple[tuple[int, ...], ...]]:
+        """A live request's KV home and its block table, one row per layer."""
+        state = self._state(request_id)
+        return state.tier, tuple(tuple(layer) for layer in state.blocks)
+
+    def install_prefix_image(
+        self, entries: Sequence[tuple[str, tuple[int, ...], float | None]]
+    ) -> None:
+        """Retain ``entries`` (key, one block per layer, expiry), oldest first, in an empty KV pool.
+
+        The blocks keep the ids they had when the image was taken, so the
+        pool's free holes are reproduced as well.
+        """
+        if not self.spec.prefix_cache_bytes:
+            raise ServeLoopError("a prefix image needs a prefix cache budget")
+        if self._kv or self._hot.references:
+            raise ServeLoopError("a prefix image installs into an empty KV pool")
+        blocks = [block for _, row, _ in entries for block in row]
+        if len(set(blocks)) != len(blocks):
+            raise ServeLoopError("a prefix image names every block once")
+        if any(not 0 <= block < self._hot.capacity_blocks for block in blocks):
+            raise ServeLoopError("a prefix image block lies outside the HBM KV pool")
+        if not blocks:
+            return
+        allocated = self._hot.allocate(max(blocks) + 1)
+        self._hot.release(sorted(set(allocated) - set(blocks)))
+        for key, row, expires_ns in entries:
+            try:
+                self._prefix.install(key, row, expires_ns)
+            except ValueError as error:
+                raise ServeLoopError(str(error)) from error
+            # The cache alone keeps the image's reference.
+            self._hot.release(row)
 
     def is_admitted(self, request_id: str) -> bool:
         return request_id in self._kv
@@ -1054,26 +1209,9 @@ class ServeLoopPlacement:
         allocated = 0
         for item in slices:
             state = self._state(item.request_id)
-            grow = max(
-                0,
-                self._blocks_per_layer_for(item.token_end) - state.blocks_per_layer,
-            )
-            if grow:
-                if not state.blocks:
-                    state.blocks = [[] for _ in range(state.model.num_layers)]
-                for layer_blocks in state.blocks:
-                    pool = self._cold if state.tier == "hbf" else self._hot
-                    assert pool is not None
-                    layer_blocks.extend(pool.allocate(grow))
-                allocated += grow * state.model.num_layers
+            allocated += self._grow(state, item.token_end)
             state.last_batch_id = batch_id
-            if self.spec.prefix_cache_bytes and state.tier == KV_HOT_TIER:
-                # The synchronous batch cannot be revised after reservation.
-                # Its append operations precede every attention read, so a
-                # later admission may reuse these not-yet-executed blocks.
-                self._prefix.publish(state.prefix_keys, state.blocks,
-                    min(item.token_end,state.request.prompt_tokens)//self.spec.kv_block_tokens,
-                    max(0.,state.request.arrival_ns),pending=True)
+            self._publish_pending(state, item.token_end)
         self._pending_batch_id = batch_id
         self._swap_out_blocks += swap_out_blocks
         self._swap_in_blocks += swap_in_blocks

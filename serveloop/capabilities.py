@@ -19,6 +19,19 @@ def current_capabilities() -> dict[str, Any]:
                 "request_scheduling_feedback": True,
                 "compute_time": "timing_provider",
                 "ttft_tpot": "only_with_compute",
+                "decode_snapshot": {
+                    "command": "python -m serveloop snapshot",
+                    "replay": "exact logical replay on a declared iteration time; decode-only stretches advanced at once",
+                    "selection": "median_context_steady_state_v1",
+                    "resume": "--prefix-image installs the replayed KV layout and prefix cache; contexts resume from HBM",
+                },
+                "sampled_window": {
+                    "option": "--sample-rate",
+                    "skipped_iterations": "writes, copies and barriers execute; reads of plain tiers are dropped",
+                    "strata": "kind, decoding sequences, prefill and context tokens by power of two",
+                    "estimator": "stratified_mean_finite_population_v1",
+                    "clock": "timed and estimated durations mixed; latencies are partly estimated",
+                },
             },
             "fixed_window": {
                 "input": "--experiment",

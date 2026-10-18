@@ -250,7 +250,7 @@ class PlacementExecutor:
         mapped = self.placement.map_batch(batch, session_frontier_ns=origin)
         self.mapped.append(mapped)
         self._frontier = max(origin, batch.schedule.not_before_ns) + self.latency_ns
-        self.placement.complete_batch(batch, self._frontier)
+        self.placement.complete_batch(batch.schedule, self._frontier)
         return BatchExecution(
             batch_id=batch.schedule.batch_id,
             batch_origin_ns=origin,

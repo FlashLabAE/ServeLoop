@@ -1005,9 +1005,9 @@ class ResolvedSystemConfig:
         """Resolved per-stack thermal model identity, mirroring the engine.
 
         The derived quantities replicate the simulator's own resolution
-        (idle steady state, pacing budget, implied sustainable bandwidth)
-        so receipts and preflights can bind the thermal contract without
-        re-reading raw config text.
+        (idle steady state, light pacing budget, implied sustainable
+        bandwidth, OCP section 9.2 thresholds) so receipts and preflights
+        can bind the thermal contract without re-reading raw config text.
         """
 
         enabled = self.boolean("hbf-thermal-enable", default=False)
@@ -1032,6 +1032,35 @@ class ResolvedSystemConfig:
         )
         throttle_c = self.floating("hbf-thermal-throttle-c")
         release_c = self.floating("hbf-thermal-release-c")
+        # STT and the shutdown point default to the engine's values when a
+        # profile predates them.
+        severe_c = (
+            95.0
+            if self.values.get("hbf-thermal-severe-c") is None
+            else self.floating("hbf-thermal-severe-c")
+        )
+        shutdown_c = (
+            105.0
+            if self.values.get("hbf-thermal-shutdown-c") is None
+            else self.floating("hbf-thermal-shutdown-c")
+        )
+        for key, value in (
+            ("hbf-thermal-release-c", release_c),
+            ("hbf-thermal-throttle-c", throttle_c),
+            ("hbf-thermal-severe-c", severe_c),
+        ):
+            # OCP TTTEMP (MMIO 0x150): 60 C + n * 0.5 C over 60..123.5 C.
+            steps = (value - 60.0) * 2.0
+            if not 60.0 <= value <= 123.5 or abs(steps - round(steps)) > 1e-9:
+                raise SimulationSessionError(
+                    f"resolved HBFSim config {key} must sit on the OCP "
+                    "TTTEMP register grid (60 C + n * 0.5 C, 60..123.5 C)"
+                )
+        if not release_c < throttle_c < severe_c < shutdown_c:
+            raise SimulationSessionError(
+                "resolved HBFSim thermal thresholds must satisfy "
+                "release (RTT) < throttle (LTT) < severe (STT) < shutdown"
+            )
         static_power = self.floating(
             "hbf-thermal-static-power-w", minimum=0.0
         )
@@ -1084,6 +1113,8 @@ class ResolvedSystemConfig:
             "time_constant_s": resistance * capacitance,
             "throttle_c": throttle_c,
             "release_c": release_c,
+            "severe_c": severe_c,
+            "shutdown_c": shutdown_c,
             "static_power_w": static_power,
             "idle_temperature_c": idle_c,
             "boot_temperature_c": (
@@ -2156,6 +2187,19 @@ class SimulationSession:
     def hbf_wear_artifacts(self) -> dict[str, str] | None:
         """Final offline HTML and JSON paths, available after graceful close."""
         return deepcopy((self._stop_receipt or {}).get("hbf_wear_artifacts"))
+
+    @property
+    def final_device_totals(self) -> dict[str, Any] | None:
+        """Cumulative device accounting from the stop receipt, after graceful close.
+
+        Batch receipts carry per-batch counters only (``device_delta``); the
+        absolute device state lives here. ``["hbf"]["state"]`` holds the
+        end-of-session HBF state, including the thermal projection
+        (``thermal_peak_temperature_c``, ``thermal_final_temperature_c``,
+        ``thermal_throttled_stacks``, ``thermal_severe_stacks``,
+        ``thermal_cattrip_stacks``). ``None`` while the session is open.
+        """
+        return deepcopy((self._stop_receipt or {}).get("device_workload_totals"))
 
     def invalidate_hbf_pages(
         self, command_id: str, *, first_lpn: int, page_count: int,

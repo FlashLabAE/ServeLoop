@@ -12,6 +12,7 @@ USAGE = """usage: serveloop <command> [options]
 
 commands:
   run       run closed-loop requests or matched fixed memory windows
+  snapshot  export a representative decode iteration of a replayed stream to resume from
   model     convert a catalog descriptor into serveloop.model JSON
   generate  generate a deterministic Poisson/lognormal request trace
   profile   profile an independent training memory window for static placement
@@ -37,6 +38,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         from serveloop.run import main as run_main
 
         return run_main(rest)
+    if command == "snapshot":
+        from serveloop.snapshot import main as snapshot_main
+
+        return snapshot_main(rest)
     if command == "model":
         from serveloop.catalog import main as model_main
 

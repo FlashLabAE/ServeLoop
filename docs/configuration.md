@@ -15,7 +15,12 @@ parts of this repository are verbatim copies of the same paths in
   physical default), and
 - `hbfsim_client/` (the persistent-session client).
 
-They currently match HBFSim `0e46ac0`. Because the relative paths are the same
+They currently match HBFSim `0e46ac0`, except that `hbfsim_client/` carries
+the later client revision that adds `sampling.py` (used by
+`serveloop run --sample-rate`); the commit recorded here, in
+`serveloop.hbfsim.BUNDLED_HBFSIM_COMMIT` and in
+`configs/ocp-profile-source.json` moves to that revision with the next
+profile synchronization. Because the relative paths are the same
 in both repositories, `--system configs/systems/miniquick/4hbm-4hbf.cfg`
 selects the same profile whether a command runs from ServeLoop or from HBFSim.
 `configs/ocp-profile-source.json` records the HBFSim commit, the SHA-256 of

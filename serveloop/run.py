@@ -13,7 +13,7 @@ selects a matched fixed memory window, without request scheduling or compute.
 from __future__ import annotations
 
 import argparse
-from dataclasses import replace
+from dataclasses import dataclass, replace
 import hashlib
 from pathlib import Path
 import sys
@@ -22,6 +22,7 @@ from typing import Any, Mapping, Sequence
 
 ROOT = Path(__file__).resolve().parents[1]
 
+from hbfsim_client.sampling import Sampler, SamplingPlan  # noqa: E402
 from hbfsim_client.simulation_session import (  # noqa: E402
     ResolvedSystemConfig,
     SimulationSessionError,
@@ -55,6 +56,11 @@ from serveloop.placement import (  # noqa: E402
     KvPlacement,
     ServeLoopPlacement,
     PlacementSpec,
+)
+from serveloop.prefix_image import (  # noqa: E402
+    PrefixImage,
+    install_prefix_image,
+    load_prefix_image,
 )
 from serveloop.synthetic import generate_requests  # noqa: E402
 
@@ -376,8 +382,17 @@ def run_experiment(
     coarse_coverage_policy: str | None = None,
     coarse_l2_capacity_bytes: int | None = None,
     coarse_l2_write_policy: str = 'write-allocate-fetch',
+    prefix_image: PrefixImage | None = None,
+    sampling: SamplingPlan | None = None,
 ) -> dict[str, Any]:
-    """Run the closed loop and return the receipted experiment document."""
+    """Run the closed loop and return the receipted experiment document.
+
+    A ``prefix_image`` (from ``serveloop snapshot``) is installed in the
+    placement's prefix cache before the first request, so the run starts
+    from that retained state. A ``sampling`` plan times only a sample of the
+    iterations in full and estimates the rest from their strata; the
+    report lands in the document's ``sampling`` section.
+    """
 
     if coarse_coverage_profile is not None and coarse_coverage_policy is not None:
         raise ServeLoopError('choose a captured profile or an analytic policy')
@@ -431,10 +446,13 @@ def run_experiment(
         hbm_stripe_bytes=hbm_stripe_bytes(system),
         router=router,
     )
+    installed_image = None if prefix_image is None else install_prefix_image(placement, prefix_image)
+    sampler = None if sampling is None else Sampler(sampling)
     executor = HbfSimExecutor(
         simulator_path=simulator,
         system_config_paths=list(system_config_paths),
         placement=placement,
+        sampler=sampler,
     )
     try:
         serveloop_result = ServeLoopEngine(
@@ -460,6 +478,8 @@ def run_experiment(
         "execution_mode": "closed_loop",
         "result": "pass",
         "inputs": dict(input_artifacts),
+        "prefix_image": installed_image,
+        "sampling": None if sampler is None else sampler.report(),
         "serveloop": serveloop_result,
         "final_execution": final_execution,
     }
@@ -467,6 +487,193 @@ def run_experiment(
         experiment['coarse_l2']=compiler.cache_receipt()
     experiment["experiment_sha256"] = canonical_sha256(experiment)
     return experiment
+
+
+SERVING_ARGUMENTS = (
+    "model", "system", "overlay", "router", "placement", "run_config",
+    "prefix_cache_bytes", "prefix_cache_ttl_ns",
+)
+TIMING_DEFAULTS = {
+    "timing": "roofline",
+    "peak_tflops": DEFAULT_PEAK_TFLOPS,
+    "efficiency": DEFAULT_EFFICIENCY,
+    "prefetch_depth": 1,
+}
+
+
+def add_serving_arguments(group: Any) -> None:
+    """The closed loop's inputs besides the requests, shared by the commands that serve or replay."""
+
+    group.add_argument(
+        "--model",
+        type=Path,
+        action="append",
+        help="serveloop.public_model descriptor or "
+        "serveloop.model JSON; required with --requests; repeat for multi-model serving",
+    )
+    group.add_argument(
+        "--system", type=Path, help="system config; required with --requests"
+    )
+    group.add_argument(
+        "--overlay",
+        type=Path,
+        action="append",
+        help="overlay config applied after --system (repeatable)",
+    )
+    group.add_argument("--router", type=Path, help="MoE router trace or synthetic router")
+    group.add_argument(
+        "--placement",
+        help="preset (" + ", ".join(sorted(PLACEMENT_PRESETS)) + ") or placement JSON; "
+        "required with --requests",
+    )
+    group.add_argument(
+        "--run-config",
+        type=Path,
+        help="serveloop.run_config JSON; default: token-budgeted mixed iterations "
+        "with roofline timing",
+    )
+    group.add_argument(
+        "--timing",
+        choices=("roofline", "memory_only"),
+        help="default: roofline; cannot combine timing knobs with --run-config",
+    )
+    group.add_argument(
+        "--peak-tflops", type=float, help=f"default: {DEFAULT_PEAK_TFLOPS}"
+    )
+    group.add_argument(
+        "--efficiency", type=float, help=f"default: {DEFAULT_EFFICIENCY}"
+    )
+    group.add_argument("--prefetch-depth", type=int, help="default: 1")
+    group.add_argument("--prefix-cache-bytes", type=int, help="bounded full-block prefix cache in the shared HBM KV pool")
+    group.add_argument("--prefix-cache-ttl-ns", type=float, help="optional prefix entry lifetime from publication; requires a nonzero cache budget")
+
+
+@dataclass(frozen=True)
+class ServingInputs:
+    """Everything a closed-loop run or replay starts from, loaded and bound."""
+
+    models: Mapping[str, ModelSpec]
+    request_trace: RequestTrace
+    router: Any
+    system_paths: tuple[Path, ...]
+    system: ResolvedSystemConfig
+    placement_spec: PlacementSpec
+    placement_label: str
+    run_config: Mapping[str, Any]
+    policy: SchedulerPolicy
+    timing: TimingProvider
+    prefetch_depth: int
+    input_artifacts: dict[str, Any]
+
+
+def resolve_serving_inputs(
+    args: argparse.Namespace, parser: argparse.ArgumentParser, *, model_derived_coverage: bool = False
+) -> ServingInputs:
+    """Load the closed loop's inputs from parsed ``add_serving_arguments`` and ``--requests``."""
+
+    missing = [
+        name for name in ("model", "system", "placement")
+        if getattr(args, name) is None
+    ]
+    if missing:
+        parser.error("--requests requires " + ", ".join("--" + name for name in missing))
+    if args.run_config is not None and any(
+        getattr(args, name) is not None for name in TIMING_DEFAULTS
+    ):
+        parser.error("--run-config cannot be combined with timing/prefetch overrides")
+    for name, value in TIMING_DEFAULTS.items():
+        if getattr(args, name) is None:
+            setattr(args, name, value)
+    if args.simulator is None:
+        parser.error("--simulator is required for physical execution")
+    system_paths = [args.system, *(args.overlay or [])]
+    models = {}
+    model_artifacts = []
+    for path in args.model:
+        model = load_model_any(path, include_coverage_descriptor=model_derived_coverage)
+        if model.model_id in models:
+            raise ServeLoopError(f"duplicate model id {model.model_id}")
+        models[model.model_id] = model
+        model_artifacts.append(_artifact(path))
+    request_trace = load_requests_any(args.requests)
+    router = None if args.router is None else load_router(args.router)
+    system = ResolvedSystemConfig.load(system_paths).resolve(args.simulator)
+    placement_path: Path | None = None
+    if args.placement in PLACEMENT_PRESETS:
+        placement_spec = derive_placement(
+            system=system, models=models, preset=args.placement
+        )
+        placement_label = args.placement
+    else:
+        placement_path = Path(args.placement)
+        placement_spec = placement_from_dict(
+            load_json_object(placement_path, "serving placement")
+        )
+        placement_label = str(placement_path)
+    if args.prefix_cache_bytes is not None or args.prefix_cache_ttl_ns is not None:
+        placement_spec = replace(
+            placement_spec,
+            prefix_cache_bytes=(placement_spec.prefix_cache_bytes if args.prefix_cache_bytes is None else args.prefix_cache_bytes),
+            prefix_cache_ttl_ns=(placement_spec.prefix_cache_ttl_ns if args.prefix_cache_ttl_ns is None else args.prefix_cache_ttl_ns),
+        )
+    if args.run_config is not None:
+        run_config = load_json_object(args.run_config, "serving run config")
+    else:
+        run_config = default_run_config(
+            timing=args.timing,
+            peak_tflops=args.peak_tflops,
+            efficiency=args.efficiency,
+            prefetch_depth=args.prefetch_depth,
+        )
+    policy, timing, prefetch_depth = run_config_from_dict(run_config)
+    if timing.timing_model == "gpu_calibrated":
+        models = {key: timing.profile.bind_model(model, timing.model_bindings[key])
+                  for key, model in models.items()}
+        if args.placement in PLACEMENT_PRESETS:
+            placement_spec = replace(derive_placement(system=system,models=models,preset=args.placement),
+                prefix_cache_bytes=placement_spec.prefix_cache_bytes,
+                prefix_cache_ttl_ns=placement_spec.prefix_cache_ttl_ns,
+                kv_block_tokens=timing.profile.document['kv_block_tokens'])
+        elif placement_spec.kv_block_tokens != timing.profile.document['kv_block_tokens']:
+            raise ServeLoopError("placement page size differs from the calibrated attention backend")
+    input_artifacts = {
+        "simulator": _artifact(args.simulator),
+        "system_configs": [_artifact(path) for path in system_paths],
+        "system_label": " + ".join(
+            path.resolve().relative_to(ROOT).as_posix()
+            if path.resolve().is_relative_to(ROOT)
+            else str(path)
+            for path in system_paths
+        ),
+        "models": model_artifacts,
+        "requests": _artifact(args.requests),
+        "request_trace": {
+            "sha256": request_trace.digest,
+            "requests": len(request_trace.requests),
+            "prompt_tokens": sum(
+                request.prompt_tokens for request in request_trace.requests
+            ),
+            "output_tokens": sum(
+                request.output_tokens for request in request_trace.requests
+            ),
+        },
+        "router": None if args.router is None else _artifact(args.router),
+        "placement": (
+            {"preset": args.placement, "sha256": placement_spec.digest}
+            if placement_path is None
+            else _artifact(placement_path)
+        ),
+        "run_config": (
+            _artifact(args.run_config)
+            if args.run_config is not None
+            else {"default": True, "sha256": canonical_sha256(run_config)}
+        ),
+    }
+    return ServingInputs(
+        models=models, request_trace=request_trace, router=router, system_paths=tuple(system_paths),
+        system=system, placement_spec=placement_spec, placement_label=placement_label,
+        run_config=run_config, policy=policy, timing=timing, prefetch_depth=prefetch_depth,
+        input_artifacts=input_artifacts)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -491,23 +698,21 @@ def build_parser() -> argparse.ArgumentParser:
         "no compute, request admission feedback, or TTFT/TPOT",
     )
     serving = parser.add_argument_group("closed-loop requests only")
+    add_serving_arguments(serving)
     serving.add_argument(
-        "--model",
+        "--prefix-image",
         type=Path,
-        action="append",
-        help="serveloop.public_model descriptor or "
-        "serveloop.model JSON; required with --requests; repeat for multi-model serving",
+        help="serveloop.prefix_image JSON from serveloop snapshot, installed in the prefix cache before the first request",
     )
     serving.add_argument(
-        "--system", type=Path, help="system config; required with --requests"
+        "--sample-rate", type=float,
+        help="time only this share of the iterations in full (after each stratum's pilot) and "
+             "estimate the rest from their strata; the others still run their writes",
     )
-    serving.add_argument(
-        "--overlay",
-        type=Path,
-        action="append",
-        help="overlay config applied after --system (repeatable)",
-    )
-    serving.add_argument("--router", type=Path, help="MoE router trace or synthetic router")
+    serving.add_argument("--sample-pilot", type=int, help="timed iterations that open every stratum (default: 2)")
+    serving.add_argument("--sample-warmup", type=int,
+                         help="timed iterations after a skipped one that stay out of the estimate (default: 1)")
+    serving.add_argument("--sample-seed", type=int, help="seed of the sampling draws (default: 0)")
     serving.add_argument('--coarse-coverage-profile',type=Path,
         help='opt-in digest-bound operator coverage profile; memory_only, covered shapes only')
     serving.add_argument('--coarse-coverage-policy',choices=('dense-16bit-swiglu','dense-bf16-swiglu','model-derived'),
@@ -518,31 +723,6 @@ def build_parser() -> argparse.ArgumentParser:
         help='default write-allocate-fetch; optional complete-sector stores skip fetch, partial stores still fetch')
     serving.add_argument('--coarse-l2-capacity-bytes',type=int,
         help='opt-in fully associative32B-sector range LRU; write-back/allocate, cold start, final drain')
-    serving.add_argument(
-        "--placement",
-        help="preset (" + ", ".join(sorted(PLACEMENT_PRESETS)) + ") or placement JSON; "
-        "required with --requests",
-    )
-    serving.add_argument(
-        "--run-config",
-        type=Path,
-        help="serveloop.run_config JSON; default: token-budgeted mixed iterations "
-        "with roofline timing",
-    )
-    serving.add_argument(
-        "--timing",
-        choices=("roofline", "memory_only"),
-        help="default: roofline; cannot combine timing knobs with --run-config",
-    )
-    serving.add_argument(
-        "--peak-tflops", type=float, help=f"default: {DEFAULT_PEAK_TFLOPS}"
-    )
-    serving.add_argument(
-        "--efficiency", type=float, help=f"default: {DEFAULT_EFFICIENCY}"
-    )
-    serving.add_argument("--prefetch-depth", type=int, help="default: 1")
-    serving.add_argument("--prefix-cache-bytes", type=int, help="bounded full-block prefix cache in the shared HBM KV pool")
-    serving.add_argument("--prefix-cache-ttl-ns", type=float, help="optional prefix entry lifetime from publication; requires a nonzero cache budget")
     window = parser.add_argument_group("fixed-window experiments only")
     window.add_argument(
         "--topologies",
@@ -562,27 +742,19 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    timing_defaults = {
-        "timing": "roofline",
-        "peak_tflops": DEFAULT_PEAK_TFLOPS,
-        "efficiency": DEFAULT_EFFICIENCY,
-        "prefetch_depth": 1,
-    }
     serving_options = (
-        "model",
-        "system",
-        "overlay",
-        "router",
-        "placement",
-        "run_config",
+        *SERVING_ARGUMENTS,
+        "prefix_image",
+        "sample_rate",
+        "sample_pilot",
+        "sample_warmup",
+        "sample_seed",
         "coarse_coverage_profile",
         "coarse_coverage_policy",
         "coarse_cache_bound",
         "coarse_l2_capacity_bytes",
         "coarse_l2_write_policy",
-        "prefix_cache_bytes",
-        "prefix_cache_ttl_ns",
-        *timing_defaults,
+        *TIMING_DEFAULTS,
     )
     if args.experiment is not None:
         invalid = [name for name in serving_options if getattr(args, name) is not None]
@@ -617,105 +789,32 @@ def main(argv: Sequence[str] | None = None) -> int:
             parser.error('coarse L2 cannot combine with ideal-temporaries')
         if args.coarse_l2_capacity_bytes<32 or args.coarse_l2_capacity_bytes%32:
             parser.error('coarse L2 capacity must be a positive multiple of32 bytes')
-    missing = [
-        name for name in ("model", "system", "placement")
-        if getattr(args, name) is None
-    ]
-    if missing:
-        parser.error("--requests requires " + ", ".join("--" + name for name in missing))
-    if args.run_config is not None and any(
-        getattr(args, name) is not None for name in timing_defaults
-    ):
-        parser.error("--run-config cannot be combined with timing/prefetch overrides")
-    for name, value in timing_defaults.items():
-        if getattr(args, name) is None:
-            setattr(args, name, value)
-    if args.simulator is None:
-        parser.error("--simulator is required for physical execution")
     try:
-        system_paths = [args.system, *(args.overlay or [])]
-        models = {}
-        model_artifacts = []
-        for path in args.model:
-            model = load_model_any(path, include_coverage_descriptor=args.coarse_coverage_policy == 'model-derived')
-            if model.model_id in models:
-                raise ServeLoopError(f"duplicate model id {model.model_id}")
-            models[model.model_id] = model
-            model_artifacts.append(_artifact(path))
-        request_trace = load_requests_any(args.requests)
-        router = None if args.router is None else load_router(args.router)
-        system = ResolvedSystemConfig.load(system_paths).resolve(args.simulator)
-        placement_path: Path | None = None
-        if args.placement in PLACEMENT_PRESETS:
-            placement_spec = derive_placement(
-                system=system, models=models, preset=args.placement
-            )
-            placement_label = args.placement
+        inputs = resolve_serving_inputs(
+            args, parser, model_derived_coverage=args.coarse_coverage_policy == 'model-derived')
+        models, request_trace, router = inputs.models, inputs.request_trace, inputs.router
+        system_paths, placement_spec = list(inputs.system_paths), inputs.placement_spec
+        placement_label, run_config = inputs.placement_label, inputs.run_config
+        policy, timing, prefetch_depth = inputs.policy, inputs.timing, inputs.prefetch_depth
+        input_artifacts = inputs.input_artifacts
+        prefix_image = None
+        if args.prefix_image is not None:
+            prefix_image = load_prefix_image(args.prefix_image)
+            input_artifacts["prefix_image"] = _artifact(args.prefix_image)
+        sampling = None
+        if args.sample_rate is None:
+            if any(getattr(args, name) is not None for name in ("sample_pilot", "sample_warmup", "sample_seed")):
+                parser.error("--sample-pilot, --sample-warmup and --sample-seed need --sample-rate")
         else:
-            placement_path = Path(args.placement)
-            placement_spec = placement_from_dict(
-                load_json_object(placement_path, "serving placement")
-            )
-            placement_label = str(placement_path)
-        if args.prefix_cache_bytes is not None or args.prefix_cache_ttl_ns is not None:
-            placement_spec = replace(
-                placement_spec,
-                prefix_cache_bytes=(placement_spec.prefix_cache_bytes if args.prefix_cache_bytes is None else args.prefix_cache_bytes),
-                prefix_cache_ttl_ns=(placement_spec.prefix_cache_ttl_ns if args.prefix_cache_ttl_ns is None else args.prefix_cache_ttl_ns),
-            )
-        if args.run_config is not None:
-            run_config = load_json_object(args.run_config, "serving run config")
-        else:
-            run_config = default_run_config(
-                timing=args.timing,
-                peak_tflops=args.peak_tflops,
-                efficiency=args.efficiency,
-                prefetch_depth=args.prefetch_depth,
-            )
-        policy, timing, prefetch_depth = run_config_from_dict(run_config)
-        if timing.timing_model == "gpu_calibrated":
-            models = {key: timing.profile.bind_model(model, timing.model_bindings[key])
-                      for key, model in models.items()}
-            if args.placement in PLACEMENT_PRESETS:
-                placement_spec = replace(derive_placement(system=system,models=models,preset=args.placement),
-                    prefix_cache_bytes=placement_spec.prefix_cache_bytes,
-                    prefix_cache_ttl_ns=placement_spec.prefix_cache_ttl_ns,
-                    kv_block_tokens=timing.profile.document['kv_block_tokens'])
-            elif placement_spec.kv_block_tokens != timing.profile.document['kv_block_tokens']:
-                raise ServeLoopError("placement page size differs from the calibrated attention backend")
-        input_artifacts = {
-            "simulator": _artifact(args.simulator),
-            "system_configs": [_artifact(path) for path in system_paths],
-            "system_label": " + ".join(
-                path.resolve().relative_to(ROOT).as_posix()
-                if path.resolve().is_relative_to(ROOT)
-                else str(path)
-                for path in system_paths
-            ),
-            "models": model_artifacts,
-            "requests": _artifact(args.requests),
-            "request_trace": {
-                "sha256": request_trace.digest,
-                "requests": len(request_trace.requests),
-                "prompt_tokens": sum(
-                    request.prompt_tokens for request in request_trace.requests
-                ),
-                "output_tokens": sum(
-                    request.output_tokens for request in request_trace.requests
-                ),
-            },
-            "router": None if args.router is None else _artifact(args.router),
-            "placement": (
-                {"preset": args.placement, "sha256": placement_spec.digest}
-                if placement_path is None
-                else _artifact(placement_path)
-            ),
-            "run_config": (
-                _artifact(args.run_config)
-                if args.run_config is not None
-                else {"default": True, "sha256": canonical_sha256(run_config)}
-            ),
-        }
+            try:
+                sampling = SamplingPlan(
+                    rate=args.sample_rate,
+                    pilot=2 if args.sample_pilot is None else args.sample_pilot,
+                    warmup=1 if args.sample_warmup is None else args.sample_warmup,
+                    seed=0 if args.sample_seed is None else args.sample_seed)
+            except ValueError as error:
+                parser.error(str(error))
+            input_artifacts["sampling"] = sampling.canonical()
         output_directory = create_run_directory(args.out)
         if args.coarse_coverage_profile is not None:
             input_artifacts['coarse_coverage'] = dict(**_artifact(args.coarse_coverage_profile),
@@ -766,12 +865,24 @@ def main(argv: Sequence[str] | None = None) -> int:
             coarse_cache_bound=args.coarse_cache_bound or 'off',
             coarse_l2_capacity_bytes=args.coarse_l2_capacity_bytes,
             coarse_l2_write_policy=args.coarse_l2_write_policy or 'write-allocate-fetch',
+            prefix_image=prefix_image,
+            sampling=sampling,
         )
         result_path = output_directory / "result.json"
         write_json_atomic(result_path, experiment)
         lines = headline_lines(
             experiment, result_path=result_path, placement_label=placement_label
         )
+        if experiment["sampling"] is not None:
+            report = experiment["sampling"]
+            interval = report["confidence_interval_95_ns"]
+            unknown = report["unknown_variance_batches"]
+            lines.append(
+                f"sampled: timed {report['timed_batches']} of {report['batches']} iterations; "
+                f"window estimate {_format_ns(report['estimate_ns'])} "
+                f"(95% interval {_format_ns(interval[0])} to {_format_ns(interval[1])}"
+                + (f", {unknown} skipped iterations in strata with one observation are outside it" if unknown else "")
+                + "); latencies above mix timed and estimated iterations")
         if args.coarse_coverage_policy is not None:
             lines.append('analytic coverage: assumed tensor footprints; attention scratch/compute unmodeled')
         if args.coarse_coverage_profile is not None:

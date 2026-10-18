@@ -183,6 +183,13 @@ row takes seconds, the 4h4f row about a quarter of an hour on a laptop. Add
   Marlin QKV ([GPU address model](docs/gpu-address-model.md)).
 - A persistent HBFSim session whose completion frontier schedules the next
   iteration.
+- Decode snapshots: an exact logical replay of a long stream on a declared
+  clock, with decode-only stretches advanced in one step, exports the state of
+  a representative iteration, and a timed run resumes from it
+  ([snapshots](docs/snapshots.md)).
+- Sampled windows: only a share of the iterations is timed in full, the rest
+  keep their writes and take their stratum's mean, and the window is reported
+  with a confidence interval ([sampling](docs/sampling.md)).
 - Matched fixed-window topology comparisons: prefill growth, decode-only, and
   source-anchored mixed windows, with no compute timing or request feedback.
 
@@ -232,6 +239,8 @@ serving profiler to cache-line address and arrival traces.
 | Profiles, HBFSim compatibility, GPU operator timing | [Configuration](docs/configuration.md) |
 | Fixed memory windows | [Windows](docs/windows.md) |
 | Prefix caching | [Prefix caching](docs/prefix-caching.md) |
+| Decode snapshots and logical replay | [Snapshots](docs/snapshots.md) |
+| Sampled windows | [Sampling](docs/sampling.md) |
 | From profiler traces to address traces | [Realism](docs/realism.md) |
 | Coarse traces | [Enhanced coarse](docs/coarse-enhanced.md), [operator coverage](docs/coarse-coverage.md), [complete-model measurements](docs/coarse-evidence.md) |
 | GPU application addresses | [GPU address model](docs/gpu-address-model.md) |

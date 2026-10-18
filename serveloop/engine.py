@@ -181,6 +181,7 @@ class ServeLoopEngine:
         self._first_open = 0
         self._unfinished = len(self._states)
         self._unadmitted = len(self._states)
+        self._iterations = 0
         self._batch_records: list[dict[str, Any]] = []
         self._preemptions: list[dict[str, Any]] = []
         # V1 schedules existing running requests in admission order, including
@@ -496,23 +497,138 @@ class ServeLoopEngine:
                         "request emitted more tokens than requested"
                     )
                 if state.emitted == state.request.output_tokens:
-                    if state.processed != state.request.processed_input_tokens:
-                        raise ServeLoopError(
-                            "request completed without processing its lifetime"
-                        )
-                    state.completion_ns = finish_ns
-                    self._unfinished -= 1
-                    self.executor.release_request(state.request.request_id)
-                    state.hot_kv_blocks = False
-                    if state in self._running:
-                        self._running.remove(state)
+                    self._finish_request(state, finish_ns)
+
+    def _finish_request(self, state: _RequestState, finish_ns: float) -> None:
+        if state.processed != state.request.processed_input_tokens:
+            raise ServeLoopError(
+                "request completed without processing its lifetime"
+            )
+        state.completion_ns = finish_ns
+        self._unfinished -= 1
+        self.executor.release_request(state.request.request_id)
+        state.hot_kv_blocks = False
+        if state in self._running:
+            self._running.remove(state)
+
+    # ------------------------------------------------------------ stepping
+    def running(self) -> tuple[tuple[str, int, int], ...]:
+        """The running requests in schedule order: id, processed tokens, emitted tokens."""
+        return tuple((state.request.request_id, state.processed, state.emitted) for state in self._running)
+
+    def request_progress(self) -> tuple[dict[str, Any], ...]:
+        """Every offered request's progress so far, in offer order."""
+        return tuple(
+            {
+                "request_id": state.request.request_id,
+                "admitted": state.admitted,
+                "processed": state.processed,
+                "emitted": state.emitted,
+                "first_token_ns": state.first_token_ns,
+                "completion_ns": state.completion_ns,
+                "preemptions": state.preemptions,
+                "prefix_hit_tokens": state.prefix_hit_tokens,
+            }
+            for state in self._states
+        )
+
+    @property
+    def iterations(self) -> int:
+        """Completed iterations; also the batch id of the next schedule."""
+        return self._iterations
+
+    def next_schedule(self) -> tuple[ScheduledBatch, Mapping[str, Any]]:
+        """Plan the next iteration and reserve its KV; ``complete`` must follow."""
+        return self._next_schedule(self._iterations)
+
+    def complete(self, schedule: ScheduledBatch, finish_ns: float) -> None:
+        """Apply an executed iteration: token frontiers, outputs and releases."""
+        if schedule.batch_id != self._iterations:
+            raise ServeLoopError("completed iteration is not the one scheduled last")
+        self._apply_completion(schedule, finish_ns)
+        self._iterations += 1
+
+    def _next_arrival_ns(self) -> float | None:
+        """Arrival of the earliest request that has not been admitted yet."""
+        for state in itertools.islice(self._sorted_states, self._first_open, None):
+            if not state.complete and not state.admitted:
+                return state.request.arrival_ns
+        return None
+
+    def decode_horizon(
+        self, schedule: ScheduledBatch, *, frontier_ns: float, iteration_ns: float
+    ) -> int:
+        """Iterations that would repeat ``schedule`` with every slice one token later.
+
+        ``schedule`` is the iteration completed last, at ``frontier_ns``;
+        each further iteration takes ``iteration_ns``. The scheduler repeats
+        a decode-only iteration until a running request emits its last
+        token, a preempted request waits to resume, or a free slot meets an
+        arrived request: an iteration admits a request when its arrival is
+        at or before the previous iteration's finish. Whether the KV pool
+        holds that many iterations of growth is the executor's part of the
+        answer, given in ``advance_decode``. Request groups release cohorts
+        on completion and are stepped one iteration at a time.
+        """
+        if not math.isfinite(frontier_ns) or frontier_ns < 0:
+            raise ServeLoopError("decode horizon frontier must be finite and >= 0")
+        if not math.isfinite(iteration_ns) or iteration_ns <= 0:
+            raise ServeLoopError("decode horizon needs a positive iteration time")
+        running = self._running
+        if (
+            self._request_groups
+            or self._resumed
+            or len(running) != len(schedule.slices)
+            or any(item.phase != "decode" for item in schedule.slices)
+            or any(
+                state.request.request_id != item.request_id
+                for state, item in zip(running, schedule.slices)
+            )
+        ):
+            return 0
+        horizon = min(state.request.output_tokens - state.emitted for state in running)
+        if len(running) < self.policy.max_batch_requests:
+            arrival = self._next_arrival_ns()
+            if arrival is not None:
+                if arrival <= frontier_ns:
+                    return 0
+                horizon = min(horizon, math.ceil((arrival - frontier_ns) / iteration_ns))
+        return horizon
+
+    def advance_decode(
+        self, schedule: ScheduledBatch, iterations: int, *, frontier_ns: float, iteration_ns: float
+    ) -> int:
+        """Apply up to ``iterations`` repeats of ``schedule`` without executing them.
+
+        Only a replay executor can do this: it reserves the KV those
+        iterations grow into and advances its own clock, stopping early when
+        the next iteration would need an eviction, a migration or a
+        preemption, which only a real iteration decides. The requests' token
+        frontiers, outputs and completions follow. Returns the number of
+        iterations applied, at most ``decode_horizon``.
+        """
+        horizon = self.decode_horizon(schedule, frontier_ns=frontier_ns, iteration_ns=iteration_ns)
+        if isinstance(iterations, bool) or not isinstance(iterations, int) or not 1 <= iterations <= horizon:
+            raise ServeLoopError(f"advance_decode takes 1..{horizon} iterations here, not {iterations!r}")
+        applied = self.executor.advance_decode(schedule, iterations)
+        if isinstance(applied, bool) or not isinstance(applied, int) or not 0 <= applied <= iterations:
+            raise ServeLoopError("executor advanced an impossible number of decode iterations")
+        finish_ns = self.executor.frontier_ns
+        for item in schedule.slices:
+            state = self._by_id[item.request_id]
+            state.processed += applied
+            state.emitted += applied
+            if state.emitted == state.request.output_tokens:
+                self._finish_request(state, finish_ns)
+        self._iterations += applied
+        return applied
 
     def run(self) -> dict[str, Any]:
         if len(self._states) != len(self.request_trace.requests):
             raise ServeLoopError("run executes the constructed trace; offered requests are step-driven only")
-        batch_id = 0
         while self._unfinished:
-            schedule, reservation = self._next_schedule(batch_id)
+            batch_id = self._iterations
+            schedule, reservation = self.next_schedule()
             canonical = self.compiler.compile(schedule)
             execution = self.executor.execute(canonical)
             if execution.batch_id != batch_id:
@@ -536,7 +652,7 @@ class ServeLoopEngine:
                 raise ServeLoopError(
                     "executor frontier differs from the returned completion"
                 )
-            self._apply_completion(schedule, execution.finish_ns)
+            self.complete(schedule, execution.finish_ns)
             self._batch_records.append(
                 {
                     "batch_id": batch_id,
@@ -558,7 +674,6 @@ class ServeLoopEngine:
             # Release this iteration's graph before constructing the next one.
             # The batch record already owns its complete audit summaries.
             del canonical, execution
-            batch_id += 1
         return self._result()
 
     def _result(self) -> dict[str, Any]:

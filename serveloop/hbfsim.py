@@ -10,6 +10,7 @@ import subprocess
 from typing import Any, Callable, Mapping, Sequence
 
 import hbfsim_client
+from hbfsim_client.sampling import Sampler, state_only
 from hbfsim_client.simulation_session import (
     SimulationSession,
     SimulationSessionError,
@@ -62,8 +63,24 @@ def describe_backend(simulator_path: Path | None) -> str:
     return "\n".join(lines)
 
 
+def batch_stratum(batch: CanonicalServingBatch) -> tuple[str, int, int, int]:
+    """Iterations alike in what they read: kind, decoding sequences, and prefill and context tokens by power of two."""
+    slices = batch.schedule.slices
+    decoding = sum(item.phase == "decode" for item in slices)
+    prefill = sum(item.token_count for item in slices if item.phase == "prefill")
+    context = sum(item.context_tokens_before for item in slices)
+    return batch.schedule.kind, decoding, prefill.bit_length(), context.bit_length()
+
+
 class HbfSimExecutor:
-    """One physical HBM/HBF/external memory system in a persistent session."""
+    """One physical HBM/HBF/external memory system in a persistent session.
+
+    With a ``sampler`` (``hbfsim_client.sampling``) only the sampled
+    iterations are timed in full; the others keep their writes and copies
+    and take their stratum's running mean as their duration, so the
+    completion frontier that schedules the next iteration mixes timed and
+    estimated durations.
+    """
 
     def __init__(
         self,
@@ -74,11 +91,13 @@ class HbfSimExecutor:
         initial_hbf_persistent_image: Path | None = None,
         preinstall_hbf_weights: bool = True,
         enable_external_recovery: bool = False,
+        sampler: Sampler | None = None,
         on_batch_completed: Callable[
             [CanonicalServingBatch, TransactionBatch, Mapping[str, Any]], None
         ] | None = None,
     ) -> None:
         self.placement = placement
+        self.sampler = sampler
         self._on_batch_completed = on_batch_completed
         external_enabled = placement.enable_external or enable_external_recovery
         try:
@@ -201,6 +220,10 @@ class HbfSimExecutor:
                 mapped = replace(mapped, frontier=(final.id,), completions=False)
             else:
                 mapped = replace(mapped, completions=False)
+            decision = None if self.sampler is None else self.sampler.decide(batch_stratum(batch))
+            if decision is not None and not decision.timed:
+                mapped = state_only(mapped, estimate_ns=decision.estimate_ns,
+                                    frontier_id=f"sample/b{batch.schedule.batch_id}")
             completion = self._session.submit(mapped)
         except (SimulationSessionError, ServeLoopError) as error:
             raise ServeLoopError(str(error)) from error
@@ -208,10 +231,15 @@ class HbfSimExecutor:
             raise ServeLoopError(
                 "HBFSim completion changed the canonical serving digest"
             )
-        self.placement.complete_batch(batch, float(completion["blocking_finish_ns"]))
+        finish = float(completion["blocking_finish_ns"])
+        if decision is not None:
+            if decision.timed:
+                self.sampler.observe(decision, finish - origin)
+            completion = {**completion, "sampling": {**decision.canonical(), "elapsed_ns": finish - origin}}
+        self.placement.complete_batch(batch.schedule, finish)
         mapped = replace(mapped, receipt={
             **mapped.receipt,
-            "prefix_cache_after_completion": self.placement._prefix.receipt(),
+            "prefix_cache_after_completion": self.placement.prefix_receipt(),
         })
         if self._on_batch_completed is not None:
             self._on_batch_completed(batch, mapped, completion)

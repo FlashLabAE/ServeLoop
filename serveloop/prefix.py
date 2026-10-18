@@ -84,6 +84,29 @@ class PrefixCache:
             self.bytes += required
             self.stats["inserted_blocks"] += 1
 
+    @property
+    def mutations(self):
+        """Entries inserted, evicted or expired so far; unchanged by hits and re-publication."""
+        return self.stats["inserted_blocks"] + self.stats["evicted_blocks"] + self.stats["expired_blocks"]
+
+    def earliest_expiry_ns(self):
+        """When the next entry expires, or None without a TTL or without timed entries."""
+        if self.ttl_ns is None:
+            return None
+        times = [entry.expires_ns for entry in self.entries.values() if entry.expires_ns is not None]
+        return min(times) if times else None
+
+    def install(self, key, blocks, expires_ns):
+        """Add a retained entry as the most recently used, taking its block references."""
+        if key in self.entries:
+            raise ValueError("prefix image repeats a block key")
+        required = len(blocks) * self.pool.block_bytes
+        if self.bytes + required > self.capacity_bytes:
+            raise ValueError("prefix image exceeds the prefix cache budget")
+        self.pool.retain(blocks)
+        self.entries[key] = PrefixEntry(tuple(blocks), expires_ns)
+        self.bytes += required
+
     def release_order(self, keys):
         # vLLM returns a completed request's blocks tail-first to the free
         # queue. Evicting suffixes first preserves usable partial prefixes;

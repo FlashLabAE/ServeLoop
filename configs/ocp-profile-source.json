@@ -1,39 +1,39 @@
 {
   "repository": "https://github.com/FlashLabAE/HBFSim",
-  "commit": "0e46ac0d073bab5df3c9e7e7ecbfac42e3756b6f",
-  "previous_commit": "2a59b7f13461356d33c00ad1f25fdee4e0bf7fb1",
+  "commit": "514e796425c37eca4047c1ae3a4e6b9fff174fe0",
+  "previous_commit": "0e46ac0d073bab5df3c9e7e7ecbfac42e3756b6f",
   "profiles": {
     "systems/2hbm-6hbf.cfg": {
       "source": "configs/systems/2hbm-6hbf.cfg",
-      "sha256": "9f5e2ab7c4e70bc4b747d17a48ddcac9822b1b7b023272c76a6c95d833bd6d80"
+      "sha256": "b0bafddf8f415c32983f406cf029d54d91f47f9ea8d1e656b14dcf60aafe45c2"
     },
     "systems/4hbm-4hbf.cfg": {
       "source": "configs/systems/4hbm-4hbf.cfg",
-      "sha256": "5e8d52dd0150deafc2ac9473abae4287a4e2881d67f5e21220cb1046579090c3"
+      "sha256": "aa39f858e057fb214fb68120fabc692af6bfb3d83e5db3c8a6b3d06858868ff9"
     },
     "systems/6hbm-2hbf.cfg": {
       "source": "configs/systems/6hbm-2hbf.cfg",
-      "sha256": "2d2f95eec003872d5aac8739b5b45ed5a7d5070dcbf54876284c5b2be3fcb79f"
+      "sha256": "03350cf34fff477c7c0cf43e9a0f0f3ad5dff7d8849275591e2923044ec88af1"
     },
     "systems/eight-stack-baseline.cfg": {
       "source": "configs/systems/eight-stack-baseline.cfg",
-      "sha256": "61f57d7a6bf1b66bc1400b067391797a0262baf4cde3256e31c0af81563e419b"
+      "sha256": "30c7cac0d5de3cf819d8cf59d2827159f88831b80dd2300b0e911b37ffa8b0be"
     },
     "systems/miniquick/2hbm-6hbf.cfg": {
       "source": "configs/systems/miniquick/2hbm-6hbf.cfg",
-      "sha256": "5ec4697259f69aa2c776dc3d422dd63b645a84f0c85e27c121a3d2fd18332073"
+      "sha256": "26bec444302f4d96f8c912e2b28ebf14728f42f1f01e486e4ba74b5072187f09"
     },
     "systems/miniquick/4hbm-4hbf.cfg": {
       "source": "configs/systems/miniquick/4hbm-4hbf.cfg",
-      "sha256": "454d5baa1631dac1efdfdd98bb5247d5fd5f877c5bd9d797f727c1b8517b331a"
+      "sha256": "217378abfe67e0e97856ab0166393eda8dc3b805a183cc1fd5cffd3fe38cb52c"
     },
     "systems/miniquick/6hbm-2hbf.cfg": {
       "source": "configs/systems/miniquick/6hbm-2hbf.cfg",
-      "sha256": "352121ceb9e952b513d7f7e595a658f445225e0498fa498a696af91f734bc676"
+      "sha256": "9c21e44a157c0b1a09d89b1a4b60bae58804c7454e6a77bdf9ddbd9d8b38583c"
     },
     "systems/miniquick/eight-stack-baseline.cfg": {
       "source": "configs/systems/miniquick/eight-stack-baseline.cfg",
-      "sha256": "c26522bcc517bdbd22c5d225c82d2864e4854c34113fadfe24ef0572522e927d"
+      "sha256": "e3f16bc8f7294a32dd36ee17524946ade1d9f648c6387e0f3be0358395f64bfa"
     },
     "systems/sglang-small.cfg": {
       "source": "configs/systems/sglang-small.cfg",
@@ -42,982 +42,86 @@
   },
   "parameter_changes": {
     "systems/2hbm-6hbf.cfg": {
-      "hbm-bandwidth-efficiency": {
+      "hbf-thermal-severe-c": {
         "old": null,
-        "new": "0.94"
+        "new": "95"
       },
-      "hbm-read-latency-ns": {
+      "hbf-thermal-shutdown-c": {
         "old": null,
-        "new": "42"
-      },
-      "hbm-read-to-write-ns": {
-        "old": null,
-        "new": "8"
-      },
-      "hbm-refresh": {
-        "old": "true",
-        "new": null
-      },
-      "hbm-same-bank-refresh": {
-        "old": "true",
-        "new": null
-      },
-      "hbm-service-group-channels": {
-        "old": null,
-        "new": "4"
-      },
-      "hbm-service-quantum-bytes": {
-        "old": null,
-        "new": "4096"
-      },
-      "hbm-tccd-l-cycles": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-tccd-s-cycles": {
-        "old": "2",
-        "new": null
-      },
-      "hbm-tcl-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-tcwl-ns": {
-        "old": "10",
-        "new": null
-      },
-      "hbm-tfaw-ns": {
-        "old": "20",
-        "new": null
-      },
-      "hbm-tras-ns": {
-        "old": "32",
-        "new": null
-      },
-      "hbm-trc-ns": {
-        "old": "46",
-        "new": null
-      },
-      "hbm-trcdrd-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trcdwr-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trefi-ns": {
-        "old": "3900",
-        "new": null
-      },
-      "hbm-trfc-ns": {
-        "old": "350",
-        "new": null
-      },
-      "hbm-trfcsb-ns": {
-        "old": "160",
-        "new": null
-      },
-      "hbm-trp-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trrd-l-ns": {
-        "old": "6",
-        "new": null
-      },
-      "hbm-trrd-s-ns": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-trrefd-ns": {
-        "old": "10",
-        "new": null
-      },
-      "hbm-trtp-ns": {
-        "old": "7.5",
-        "new": null
-      },
-      "hbm-trtw-ns": {
-        "old": "8",
-        "new": null
-      },
-      "hbm-twr-ns": {
-        "old": "15",
-        "new": null
-      },
-      "hbm-twtr-l-ns": {
-        "old": "8",
-        "new": null
-      },
-      "hbm-twtr-s-ns": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-write-latency-ns": {
-        "old": null,
-        "new": "38"
-      },
-      "hbm-write-to-read-ns": {
-        "old": null,
-        "new": "8"
+        "new": "105"
       }
     },
     "systems/4hbm-4hbf.cfg": {
-      "hbm-bandwidth-efficiency": {
+      "hbf-thermal-severe-c": {
         "old": null,
-        "new": "0.94"
+        "new": "95"
       },
-      "hbm-read-latency-ns": {
+      "hbf-thermal-shutdown-c": {
         "old": null,
-        "new": "42"
-      },
-      "hbm-read-to-write-ns": {
-        "old": null,
-        "new": "8"
-      },
-      "hbm-refresh": {
-        "old": "true",
-        "new": null
-      },
-      "hbm-same-bank-refresh": {
-        "old": "true",
-        "new": null
-      },
-      "hbm-service-group-channels": {
-        "old": null,
-        "new": "4"
-      },
-      "hbm-service-quantum-bytes": {
-        "old": null,
-        "new": "4096"
-      },
-      "hbm-tccd-l-cycles": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-tccd-s-cycles": {
-        "old": "2",
-        "new": null
-      },
-      "hbm-tcl-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-tcwl-ns": {
-        "old": "10",
-        "new": null
-      },
-      "hbm-tfaw-ns": {
-        "old": "20",
-        "new": null
-      },
-      "hbm-tras-ns": {
-        "old": "32",
-        "new": null
-      },
-      "hbm-trc-ns": {
-        "old": "46",
-        "new": null
-      },
-      "hbm-trcdrd-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trcdwr-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trefi-ns": {
-        "old": "3900",
-        "new": null
-      },
-      "hbm-trfc-ns": {
-        "old": "350",
-        "new": null
-      },
-      "hbm-trfcsb-ns": {
-        "old": "160",
-        "new": null
-      },
-      "hbm-trp-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trrd-l-ns": {
-        "old": "6",
-        "new": null
-      },
-      "hbm-trrd-s-ns": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-trrefd-ns": {
-        "old": "10",
-        "new": null
-      },
-      "hbm-trtp-ns": {
-        "old": "7.5",
-        "new": null
-      },
-      "hbm-trtw-ns": {
-        "old": "8",
-        "new": null
-      },
-      "hbm-twr-ns": {
-        "old": "15",
-        "new": null
-      },
-      "hbm-twtr-l-ns": {
-        "old": "8",
-        "new": null
-      },
-      "hbm-twtr-s-ns": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-write-latency-ns": {
-        "old": null,
-        "new": "38"
-      },
-      "hbm-write-to-read-ns": {
-        "old": null,
-        "new": "8"
+        "new": "105"
       }
     },
     "systems/6hbm-2hbf.cfg": {
-      "hbm-bandwidth-efficiency": {
+      "hbf-thermal-severe-c": {
         "old": null,
-        "new": "0.94"
+        "new": "95"
       },
-      "hbm-read-latency-ns": {
+      "hbf-thermal-shutdown-c": {
         "old": null,
-        "new": "42"
-      },
-      "hbm-read-to-write-ns": {
-        "old": null,
-        "new": "8"
-      },
-      "hbm-refresh": {
-        "old": "true",
-        "new": null
-      },
-      "hbm-same-bank-refresh": {
-        "old": "true",
-        "new": null
-      },
-      "hbm-service-group-channels": {
-        "old": null,
-        "new": "4"
-      },
-      "hbm-service-quantum-bytes": {
-        "old": null,
-        "new": "4096"
-      },
-      "hbm-tccd-l-cycles": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-tccd-s-cycles": {
-        "old": "2",
-        "new": null
-      },
-      "hbm-tcl-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-tcwl-ns": {
-        "old": "10",
-        "new": null
-      },
-      "hbm-tfaw-ns": {
-        "old": "20",
-        "new": null
-      },
-      "hbm-tras-ns": {
-        "old": "32",
-        "new": null
-      },
-      "hbm-trc-ns": {
-        "old": "46",
-        "new": null
-      },
-      "hbm-trcdrd-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trcdwr-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trefi-ns": {
-        "old": "3900",
-        "new": null
-      },
-      "hbm-trfc-ns": {
-        "old": "350",
-        "new": null
-      },
-      "hbm-trfcsb-ns": {
-        "old": "160",
-        "new": null
-      },
-      "hbm-trp-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trrd-l-ns": {
-        "old": "6",
-        "new": null
-      },
-      "hbm-trrd-s-ns": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-trrefd-ns": {
-        "old": "10",
-        "new": null
-      },
-      "hbm-trtp-ns": {
-        "old": "7.5",
-        "new": null
-      },
-      "hbm-trtw-ns": {
-        "old": "8",
-        "new": null
-      },
-      "hbm-twr-ns": {
-        "old": "15",
-        "new": null
-      },
-      "hbm-twtr-l-ns": {
-        "old": "8",
-        "new": null
-      },
-      "hbm-twtr-s-ns": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-write-latency-ns": {
-        "old": null,
-        "new": "38"
-      },
-      "hbm-write-to-read-ns": {
-        "old": null,
-        "new": "8"
+        "new": "105"
       }
     },
     "systems/eight-stack-baseline.cfg": {
-      "hbm-bandwidth-efficiency": {
+      "hbf-thermal-severe-c": {
         "old": null,
-        "new": "0.94"
+        "new": "95"
       },
-      "hbm-read-latency-ns": {
+      "hbf-thermal-shutdown-c": {
         "old": null,
-        "new": "42"
-      },
-      "hbm-read-to-write-ns": {
-        "old": null,
-        "new": "8"
-      },
-      "hbm-refresh": {
-        "old": "true",
-        "new": null
-      },
-      "hbm-same-bank-refresh": {
-        "old": "true",
-        "new": null
-      },
-      "hbm-service-group-channels": {
-        "old": null,
-        "new": "4"
-      },
-      "hbm-service-quantum-bytes": {
-        "old": null,
-        "new": "4096"
-      },
-      "hbm-tccd-l-cycles": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-tccd-s-cycles": {
-        "old": "2",
-        "new": null
-      },
-      "hbm-tcl-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-tcwl-ns": {
-        "old": "10",
-        "new": null
-      },
-      "hbm-tfaw-ns": {
-        "old": "20",
-        "new": null
-      },
-      "hbm-tras-ns": {
-        "old": "32",
-        "new": null
-      },
-      "hbm-trc-ns": {
-        "old": "46",
-        "new": null
-      },
-      "hbm-trcdrd-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trcdwr-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trefi-ns": {
-        "old": "3900",
-        "new": null
-      },
-      "hbm-trfc-ns": {
-        "old": "350",
-        "new": null
-      },
-      "hbm-trfcsb-ns": {
-        "old": "160",
-        "new": null
-      },
-      "hbm-trp-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trrd-l-ns": {
-        "old": "6",
-        "new": null
-      },
-      "hbm-trrd-s-ns": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-trrefd-ns": {
-        "old": "10",
-        "new": null
-      },
-      "hbm-trtp-ns": {
-        "old": "7.5",
-        "new": null
-      },
-      "hbm-trtw-ns": {
-        "old": "8",
-        "new": null
-      },
-      "hbm-twr-ns": {
-        "old": "15",
-        "new": null
-      },
-      "hbm-twtr-l-ns": {
-        "old": "8",
-        "new": null
-      },
-      "hbm-twtr-s-ns": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-write-latency-ns": {
-        "old": null,
-        "new": "38"
-      },
-      "hbm-write-to-read-ns": {
-        "old": null,
-        "new": "8"
+        "new": "105"
       }
     },
     "systems/miniquick/2hbm-6hbf.cfg": {
-      "hbm-bandwidth-efficiency": {
+      "hbf-thermal-severe-c": {
         "old": null,
-        "new": "0.94"
+        "new": "95"
       },
-      "hbm-read-latency-ns": {
+      "hbf-thermal-shutdown-c": {
         "old": null,
-        "new": "42"
-      },
-      "hbm-read-to-write-ns": {
-        "old": null,
-        "new": "8"
-      },
-      "hbm-refresh": {
-        "old": "true",
-        "new": null
-      },
-      "hbm-same-bank-refresh": {
-        "old": "true",
-        "new": null
-      },
-      "hbm-service-group-channels": {
-        "old": null,
-        "new": "4"
-      },
-      "hbm-service-quantum-bytes": {
-        "old": null,
-        "new": "4096"
-      },
-      "hbm-tccd-l-cycles": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-tccd-s-cycles": {
-        "old": "2",
-        "new": null
-      },
-      "hbm-tcl-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-tcwl-ns": {
-        "old": "10",
-        "new": null
-      },
-      "hbm-tfaw-ns": {
-        "old": "20",
-        "new": null
-      },
-      "hbm-tras-ns": {
-        "old": "32",
-        "new": null
-      },
-      "hbm-trc-ns": {
-        "old": "46",
-        "new": null
-      },
-      "hbm-trcdrd-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trcdwr-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trefi-ns": {
-        "old": "3900",
-        "new": null
-      },
-      "hbm-trfc-ns": {
-        "old": "350",
-        "new": null
-      },
-      "hbm-trfcsb-ns": {
-        "old": "160",
-        "new": null
-      },
-      "hbm-trp-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trrd-l-ns": {
-        "old": "6",
-        "new": null
-      },
-      "hbm-trrd-s-ns": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-trrefd-ns": {
-        "old": "10",
-        "new": null
-      },
-      "hbm-trtp-ns": {
-        "old": "7.5",
-        "new": null
-      },
-      "hbm-trtw-ns": {
-        "old": "8",
-        "new": null
-      },
-      "hbm-twr-ns": {
-        "old": "15",
-        "new": null
-      },
-      "hbm-twtr-l-ns": {
-        "old": "8",
-        "new": null
-      },
-      "hbm-twtr-s-ns": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-write-latency-ns": {
-        "old": null,
-        "new": "38"
-      },
-      "hbm-write-to-read-ns": {
-        "old": null,
-        "new": "8"
+        "new": "105"
       }
     },
     "systems/miniquick/4hbm-4hbf.cfg": {
-      "hbm-bandwidth-efficiency": {
+      "hbf-thermal-severe-c": {
         "old": null,
-        "new": "0.94"
+        "new": "95"
       },
-      "hbm-read-latency-ns": {
+      "hbf-thermal-shutdown-c": {
         "old": null,
-        "new": "42"
-      },
-      "hbm-read-to-write-ns": {
-        "old": null,
-        "new": "8"
-      },
-      "hbm-refresh": {
-        "old": "true",
-        "new": null
-      },
-      "hbm-same-bank-refresh": {
-        "old": "true",
-        "new": null
-      },
-      "hbm-service-group-channels": {
-        "old": null,
-        "new": "4"
-      },
-      "hbm-service-quantum-bytes": {
-        "old": null,
-        "new": "4096"
-      },
-      "hbm-tccd-l-cycles": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-tccd-s-cycles": {
-        "old": "2",
-        "new": null
-      },
-      "hbm-tcl-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-tcwl-ns": {
-        "old": "10",
-        "new": null
-      },
-      "hbm-tfaw-ns": {
-        "old": "20",
-        "new": null
-      },
-      "hbm-tras-ns": {
-        "old": "32",
-        "new": null
-      },
-      "hbm-trc-ns": {
-        "old": "46",
-        "new": null
-      },
-      "hbm-trcdrd-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trcdwr-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trefi-ns": {
-        "old": "3900",
-        "new": null
-      },
-      "hbm-trfc-ns": {
-        "old": "350",
-        "new": null
-      },
-      "hbm-trfcsb-ns": {
-        "old": "160",
-        "new": null
-      },
-      "hbm-trp-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trrd-l-ns": {
-        "old": "6",
-        "new": null
-      },
-      "hbm-trrd-s-ns": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-trrefd-ns": {
-        "old": "10",
-        "new": null
-      },
-      "hbm-trtp-ns": {
-        "old": "7.5",
-        "new": null
-      },
-      "hbm-trtw-ns": {
-        "old": "8",
-        "new": null
-      },
-      "hbm-twr-ns": {
-        "old": "15",
-        "new": null
-      },
-      "hbm-twtr-l-ns": {
-        "old": "8",
-        "new": null
-      },
-      "hbm-twtr-s-ns": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-write-latency-ns": {
-        "old": null,
-        "new": "38"
-      },
-      "hbm-write-to-read-ns": {
-        "old": null,
-        "new": "8"
+        "new": "105"
       }
     },
     "systems/miniquick/6hbm-2hbf.cfg": {
-      "hbm-bandwidth-efficiency": {
+      "hbf-thermal-severe-c": {
         "old": null,
-        "new": "0.94"
+        "new": "95"
       },
-      "hbm-read-latency-ns": {
+      "hbf-thermal-shutdown-c": {
         "old": null,
-        "new": "42"
-      },
-      "hbm-read-to-write-ns": {
-        "old": null,
-        "new": "8"
-      },
-      "hbm-refresh": {
-        "old": "true",
-        "new": null
-      },
-      "hbm-same-bank-refresh": {
-        "old": "true",
-        "new": null
-      },
-      "hbm-service-group-channels": {
-        "old": null,
-        "new": "4"
-      },
-      "hbm-service-quantum-bytes": {
-        "old": null,
-        "new": "4096"
-      },
-      "hbm-tccd-l-cycles": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-tccd-s-cycles": {
-        "old": "2",
-        "new": null
-      },
-      "hbm-tcl-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-tcwl-ns": {
-        "old": "10",
-        "new": null
-      },
-      "hbm-tfaw-ns": {
-        "old": "20",
-        "new": null
-      },
-      "hbm-tras-ns": {
-        "old": "32",
-        "new": null
-      },
-      "hbm-trc-ns": {
-        "old": "46",
-        "new": null
-      },
-      "hbm-trcdrd-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trcdwr-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trefi-ns": {
-        "old": "3900",
-        "new": null
-      },
-      "hbm-trfc-ns": {
-        "old": "350",
-        "new": null
-      },
-      "hbm-trfcsb-ns": {
-        "old": "160",
-        "new": null
-      },
-      "hbm-trp-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trrd-l-ns": {
-        "old": "6",
-        "new": null
-      },
-      "hbm-trrd-s-ns": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-trrefd-ns": {
-        "old": "10",
-        "new": null
-      },
-      "hbm-trtp-ns": {
-        "old": "7.5",
-        "new": null
-      },
-      "hbm-trtw-ns": {
-        "old": "8",
-        "new": null
-      },
-      "hbm-twr-ns": {
-        "old": "15",
-        "new": null
-      },
-      "hbm-twtr-l-ns": {
-        "old": "8",
-        "new": null
-      },
-      "hbm-twtr-s-ns": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-write-latency-ns": {
-        "old": null,
-        "new": "38"
-      },
-      "hbm-write-to-read-ns": {
-        "old": null,
-        "new": "8"
+        "new": "105"
       }
     },
     "systems/miniquick/eight-stack-baseline.cfg": {
-      "hbm-bandwidth-efficiency": {
+      "hbf-thermal-severe-c": {
         "old": null,
-        "new": "0.94"
+        "new": "95"
       },
-      "hbm-read-latency-ns": {
+      "hbf-thermal-shutdown-c": {
         "old": null,
-        "new": "42"
-      },
-      "hbm-read-to-write-ns": {
-        "old": null,
-        "new": "8"
-      },
-      "hbm-refresh": {
-        "old": "true",
-        "new": null
-      },
-      "hbm-same-bank-refresh": {
-        "old": "true",
-        "new": null
-      },
-      "hbm-service-group-channels": {
-        "old": null,
-        "new": "4"
-      },
-      "hbm-service-quantum-bytes": {
-        "old": null,
-        "new": "4096"
-      },
-      "hbm-tccd-l-cycles": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-tccd-s-cycles": {
-        "old": "2",
-        "new": null
-      },
-      "hbm-tcl-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-tcwl-ns": {
-        "old": "10",
-        "new": null
-      },
-      "hbm-tfaw-ns": {
-        "old": "20",
-        "new": null
-      },
-      "hbm-tras-ns": {
-        "old": "32",
-        "new": null
-      },
-      "hbm-trc-ns": {
-        "old": "46",
-        "new": null
-      },
-      "hbm-trcdrd-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trcdwr-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trefi-ns": {
-        "old": "3900",
-        "new": null
-      },
-      "hbm-trfc-ns": {
-        "old": "350",
-        "new": null
-      },
-      "hbm-trfcsb-ns": {
-        "old": "160",
-        "new": null
-      },
-      "hbm-trp-ns": {
-        "old": "14",
-        "new": null
-      },
-      "hbm-trrd-l-ns": {
-        "old": "6",
-        "new": null
-      },
-      "hbm-trrd-s-ns": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-trrefd-ns": {
-        "old": "10",
-        "new": null
-      },
-      "hbm-trtp-ns": {
-        "old": "7.5",
-        "new": null
-      },
-      "hbm-trtw-ns": {
-        "old": "8",
-        "new": null
-      },
-      "hbm-twr-ns": {
-        "old": "15",
-        "new": null
-      },
-      "hbm-twtr-l-ns": {
-        "old": "8",
-        "new": null
-      },
-      "hbm-twtr-s-ns": {
-        "old": "4",
-        "new": null
-      },
-      "hbm-write-latency-ns": {
-        "old": null,
-        "new": "38"
-      },
-      "hbm-write-to-read-ns": {
-        "old": null,
-        "new": "8"
+        "new": "105"
       }
     },
     "systems/sglang-small.cfg": {}
   },
-  "parameter_provenance_sha256": "c30e726971a9218ffd5f543ab47f9dd8467d7d5cc49fbd0145f7e41f37f32ef6"
+  "parameter_provenance_sha256": "775cc091473bfd6616c2b683bd5cf6bede16d045810bc7a9c91ad00731c98498"
 }

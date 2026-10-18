@@ -133,7 +133,7 @@ The client and the engine change together, so pair their versions on purpose:
 
 | What | Where it is pinned |
 | --- | --- |
-| HBFSim commit that ServeLoop's bundled client and profiles copy | `0e46ac0`, see [backend compatibility](docs/configuration.md#backend-compatibility) |
+| HBFSim commit that ServeLoop's bundled client and profiles copy | `514e796`, see [backend compatibility](docs/configuration.md#backend-compatibility) |
 | Oldest ServeLoop that HBFSim's tests accept | `HBFSIM_SERVELOOP_MIN_REVISION` in HBFSim's `CMakeLists.txt` |
 | ServeLoop revision that HBFSim's CI tests | `SERVELOOP_REVISION` in HBFSim's `.github/workflows/ci.yml` |
 

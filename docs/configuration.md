@@ -15,12 +15,9 @@ parts of this repository are verbatim copies of the same paths in
   physical default), and
 - `hbfsim_client/` (the persistent-session client).
 
-They currently match HBFSim `0e46ac0`, except that `hbfsim_client/` carries
-the later client revision that adds `sampling.py` (used by
-`serveloop run --sample-rate`); the commit recorded here, in
+They currently match HBFSim `514e796`; the same commit is recorded in
 `serveloop.hbfsim.BUNDLED_HBFSIM_COMMIT` and in
-`configs/ocp-profile-source.json` moves to that revision with the next
-profile synchronization. Because the relative paths are the same
+`configs/ocp-profile-source.json`. Because the relative paths are the same
 in both repositories, `--system configs/systems/miniquick/4hbm-4hbf.cfg`
 selects the same profile whether a command runs from ServeLoop or from HBFSim.
 `configs/ocp-profile-source.json` records the HBFSim commit, the SHA-256 of
@@ -81,7 +78,7 @@ reservation, TP/EP or every scheduler version.
 
 ## Backend compatibility
 
-Supported backend: HBFSim `0e46ac0d073bab5df3c9e7e7ecbfac42e3756b6f`.
+Supported backend: HBFSim `514e796425c37eca4047c1ae3a4e6b9fff174fe0`.
 In the other direction, HBFSim's integration tests accept ServeLoop at or after
 `HBFSIM_SERVELOOP_MIN_REVISION` in its `CMakeLists.txt`.
 
@@ -92,11 +89,25 @@ change together with the engine. Running from the ServeLoop directory selects
 the bundled client; running from an HBFSim checkout selects HBFSim's. At the
 supported revision the two are identical.
 
-The latest synchronization replaced HBM per-command timing with HBFSim's
-aggregate channel model. The engine rejects the removed keys. This is a
-physical model change, not a key rename, so HBM timing simulated with the
-previous profiles is not reproduced. HBF, capacity, thermal and backing values
-are unchanged.
+The latest synchronization (HBFSim `514e796`) added the two upper thresholds
+of HBFSim's OCP section 9.2 thermal modes to the eight complete profiles:
+`hbf-thermal-severe-c=95`, at which the stack asserts CATTRIP, completes the
+commands it has accepted and makes every later host command wait until it has
+cooled below `hbf-thermal-throttle-c`, and `hbf-thermal-shutdown-c=105`, at
+which the run fails closed. The engine requires `hbf-thermal-release-c` <
+`hbf-thermal-throttle-c` < `hbf-thermal-severe-c` < `hbf-thermal-shutdown-c`,
+the first three on the TTTEMP register grid (60 C + n × 0.5 C).
+`sglang-small.cfg` and every other value are unchanged, and
+`configs/parameter-provenance.json` was refreshed with the engine's current
+notes. The profiles keep `hbf-thermal-throttle-power-w=0`, the light budget
+whose equilibrium is `hbf-thermal-throttle-c`, so a throttled stack settles at
+that threshold and never reaches the severe one; results are reproduced, and
+only an explicit budget above the derived one can reach the severe mode.
+
+The previous synchronization (`0e46ac0`) replaced HBM per-command timing with
+HBFSim's aggregate channel model. The engine rejects the removed keys. This is
+a physical model change, not a key rename, so HBM timing simulated with
+profiles older than that is not reproduced.
 
 - Removed: `hbm-tccd-s-cycles`, `hbm-tccd-l-cycles`, `hbm-tcl-ns`,
   `hbm-tcwl-ns`, `hbm-tfaw-ns`, `hbm-tras-ns`, `hbm-trc-ns`, `hbm-trcdrd-ns`,

@@ -15,7 +15,7 @@ parts of this repository are verbatim copies of the same paths in
   physical default), and
 - `hbfsim_client/` (the persistent-session client).
 
-They currently match HBFSim `514e796`; the same commit is recorded in
+They currently match HBFSim `2287232`; the same commit is recorded in
 `serveloop.hbfsim.BUNDLED_HBFSIM_COMMIT` and in
 `configs/ocp-profile-source.json`. Because the relative paths are the same
 in both repositories, `--system configs/systems/miniquick/4hbm-4hbf.cfg`
@@ -78,7 +78,7 @@ reservation, TP/EP or every scheduler version.
 
 ## Backend compatibility
 
-Supported backend: HBFSim `514e796425c37eca4047c1ae3a4e6b9fff174fe0`.
+Supported backend: HBFSim `22872328e06008e9b80b3b8e1a5a40c14739499a`.
 In the other direction, HBFSim's integration tests accept ServeLoop at or after
 `HBFSIM_SERVELOOP_MIN_REVISION` in its `CMakeLists.txt`.
 
@@ -89,20 +89,21 @@ change together with the engine. Running from the ServeLoop directory selects
 the bundled client; running from an HBFSim checkout selects HBFSim's. At the
 supported revision the two are identical.
 
-The latest synchronization (HBFSim `514e796`) added the two upper thresholds
-of HBFSim's OCP section 9.2 thermal modes to the eight complete profiles:
-`hbf-thermal-severe-c=95`, at which the stack asserts CATTRIP, completes the
-commands it has accepted and makes every later host command wait until it has
-cooled below `hbf-thermal-throttle-c`, and `hbf-thermal-shutdown-c=105`, at
-which the run fails closed. The engine requires `hbf-thermal-release-c` <
-`hbf-thermal-throttle-c` < `hbf-thermal-severe-c` < `hbf-thermal-shutdown-c`,
-the first three on the TTTEMP register grid (60 C + n × 0.5 C).
-`sglang-small.cfg` and every other value are unchanged, and
-`configs/parameter-provenance.json` was refreshed with the engine's current
-notes. The profiles keep `hbf-thermal-throttle-power-w=0`, the light budget
-whose equilibrium is `hbf-thermal-throttle-c`, so a throttled stack settles at
-that threshold and never reaches the severe one; results are reproduced, and
-only an explicit budget above the derived one can reach the severe mode.
+The latest synchronization (HBFSim `2287232`) replaced the thermal energy and
+RC values of the eight complete profiles with values derived from published
+sources: `hbf-thermal-read-energy-pj-per-bit` 6 → 8,
+`hbf-thermal-program-energy-pj-per-bit` 60 → 150,
+`hbf-thermal-erase-energy-uj-per-block` 150 → 131,
+`hbf-thermal-resistance-c-per-w` 2.5 → 2.0 and
+`hbf-thermal-capacitance-j-per-c` 3.0 → 0.3, so a stack's thermal time
+constant is 0.6 s and the derived light budget behind the 45 C boundary
+18 W per stack; HBFSim's `docs/reference/thermal-parameters.md` gives each
+derivation and its range. The previous synchronization (`514e796`) had added
+`hbf-thermal-severe-c=95` and `hbf-thermal-shutdown-c=105`, the two upper
+thresholds of the OCP section 9.2 thermal modes. `sglang-small.cfg` and every
+other value are unchanged. Windows in which a stack reaches its light
+threshold now pace media operations differently from the earlier copies;
+windows that stay below it reproduce their results.
 
 The previous synchronization (`0e46ac0`) replaced HBM per-command timing with
 HBFSim's aggregate channel model. The engine rejects the removed keys. This is

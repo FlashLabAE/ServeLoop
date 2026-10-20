@@ -1,39 +1,39 @@
 {
   "repository": "https://github.com/FlashLabAE/HBFSim",
-  "commit": "514e796425c37eca4047c1ae3a4e6b9fff174fe0",
-  "previous_commit": "0e46ac0d073bab5df3c9e7e7ecbfac42e3756b6f",
+  "commit": "22872328e06008e9b80b3b8e1a5a40c14739499a",
+  "previous_commit": "514e796425c37eca4047c1ae3a4e6b9fff174fe0",
   "profiles": {
     "systems/2hbm-6hbf.cfg": {
       "source": "configs/systems/2hbm-6hbf.cfg",
-      "sha256": "b0bafddf8f415c32983f406cf029d54d91f47f9ea8d1e656b14dcf60aafe45c2"
+      "sha256": "47b383d71ce440458a65593dd8cbdc727d1887d712855ccfbfdb5a1bcd71ef35"
     },
     "systems/4hbm-4hbf.cfg": {
       "source": "configs/systems/4hbm-4hbf.cfg",
-      "sha256": "aa39f858e057fb214fb68120fabc692af6bfb3d83e5db3c8a6b3d06858868ff9"
+      "sha256": "7780af4eb7e151c5d64f40b98cd592133be7c2f9709dbab18b63c791bcd79e2c"
     },
     "systems/6hbm-2hbf.cfg": {
       "source": "configs/systems/6hbm-2hbf.cfg",
-      "sha256": "03350cf34fff477c7c0cf43e9a0f0f3ad5dff7d8849275591e2923044ec88af1"
+      "sha256": "d716970d16e636fbbf826fe82ee72216d404e70e409792c068009259513867c3"
     },
     "systems/eight-stack-baseline.cfg": {
       "source": "configs/systems/eight-stack-baseline.cfg",
-      "sha256": "30c7cac0d5de3cf819d8cf59d2827159f88831b80dd2300b0e911b37ffa8b0be"
+      "sha256": "63011c762e95765f89c6c7b7b56a65684b6d77bbb7a1ef00fe4db4a1dbc21f37"
     },
     "systems/miniquick/2hbm-6hbf.cfg": {
       "source": "configs/systems/miniquick/2hbm-6hbf.cfg",
-      "sha256": "26bec444302f4d96f8c912e2b28ebf14728f42f1f01e486e4ba74b5072187f09"
+      "sha256": "c5ddb1eeff42e494dd05e4cd82b66a81820a18f070b4d406c40c5eee29c9f17d"
     },
     "systems/miniquick/4hbm-4hbf.cfg": {
       "source": "configs/systems/miniquick/4hbm-4hbf.cfg",
-      "sha256": "217378abfe67e0e97856ab0166393eda8dc3b805a183cc1fd5cffd3fe38cb52c"
+      "sha256": "9923589a39cec2b045bc0e361546a00cb65eb50a4bb57de5cdf192117c064582"
     },
     "systems/miniquick/6hbm-2hbf.cfg": {
       "source": "configs/systems/miniquick/6hbm-2hbf.cfg",
-      "sha256": "9c21e44a157c0b1a09d89b1a4b60bae58804c7454e6a77bdf9ddbd9d8b38583c"
+      "sha256": "88337a6c477782432e7dd667150a5f51c70bbee7bba24722d5289ce8d0dbf28d"
     },
     "systems/miniquick/eight-stack-baseline.cfg": {
       "source": "configs/systems/miniquick/eight-stack-baseline.cfg",
-      "sha256": "e3f16bc8f7294a32dd36ee17524946ade1d9f648c6387e0f3be0358395f64bfa"
+      "sha256": "57f2945c3c06e82b35d1e1564f216a2af0c0d091aefc52ce55da7d4868ebfee5"
     },
     "systems/sglang-small.cfg": {
       "source": "configs/systems/sglang-small.cfg",
@@ -42,86 +42,182 @@
   },
   "parameter_changes": {
     "systems/2hbm-6hbf.cfg": {
-      "hbf-thermal-severe-c": {
-        "old": null,
-        "new": "95"
+      "hbf-thermal-capacitance-j-per-c": {
+        "old": "3.0",
+        "new": "0.3"
       },
-      "hbf-thermal-shutdown-c": {
-        "old": null,
-        "new": "105"
+      "hbf-thermal-erase-energy-uj-per-block": {
+        "old": "150.0",
+        "new": "131.0"
+      },
+      "hbf-thermal-program-energy-pj-per-bit": {
+        "old": "60.0",
+        "new": "150.0"
+      },
+      "hbf-thermal-read-energy-pj-per-bit": {
+        "old": "6.0",
+        "new": "8.0"
+      },
+      "hbf-thermal-resistance-c-per-w": {
+        "old": "2.5",
+        "new": "2.0"
       }
     },
     "systems/4hbm-4hbf.cfg": {
-      "hbf-thermal-severe-c": {
-        "old": null,
-        "new": "95"
+      "hbf-thermal-capacitance-j-per-c": {
+        "old": "3.0",
+        "new": "0.3"
       },
-      "hbf-thermal-shutdown-c": {
-        "old": null,
-        "new": "105"
+      "hbf-thermal-erase-energy-uj-per-block": {
+        "old": "150.0",
+        "new": "131.0"
+      },
+      "hbf-thermal-program-energy-pj-per-bit": {
+        "old": "60.0",
+        "new": "150.0"
+      },
+      "hbf-thermal-read-energy-pj-per-bit": {
+        "old": "6.0",
+        "new": "8.0"
+      },
+      "hbf-thermal-resistance-c-per-w": {
+        "old": "2.5",
+        "new": "2.0"
       }
     },
     "systems/6hbm-2hbf.cfg": {
-      "hbf-thermal-severe-c": {
-        "old": null,
-        "new": "95"
+      "hbf-thermal-capacitance-j-per-c": {
+        "old": "3.0",
+        "new": "0.3"
       },
-      "hbf-thermal-shutdown-c": {
-        "old": null,
-        "new": "105"
+      "hbf-thermal-erase-energy-uj-per-block": {
+        "old": "150.0",
+        "new": "131.0"
+      },
+      "hbf-thermal-program-energy-pj-per-bit": {
+        "old": "60.0",
+        "new": "150.0"
+      },
+      "hbf-thermal-read-energy-pj-per-bit": {
+        "old": "6.0",
+        "new": "8.0"
+      },
+      "hbf-thermal-resistance-c-per-w": {
+        "old": "2.5",
+        "new": "2.0"
       }
     },
     "systems/eight-stack-baseline.cfg": {
-      "hbf-thermal-severe-c": {
-        "old": null,
-        "new": "95"
+      "hbf-thermal-capacitance-j-per-c": {
+        "old": "3.0",
+        "new": "0.3"
       },
-      "hbf-thermal-shutdown-c": {
-        "old": null,
-        "new": "105"
+      "hbf-thermal-erase-energy-uj-per-block": {
+        "old": "150.0",
+        "new": "131.0"
+      },
+      "hbf-thermal-program-energy-pj-per-bit": {
+        "old": "60.0",
+        "new": "150.0"
+      },
+      "hbf-thermal-read-energy-pj-per-bit": {
+        "old": "6.0",
+        "new": "8.0"
+      },
+      "hbf-thermal-resistance-c-per-w": {
+        "old": "2.5",
+        "new": "2.0"
       }
     },
     "systems/miniquick/2hbm-6hbf.cfg": {
-      "hbf-thermal-severe-c": {
-        "old": null,
-        "new": "95"
+      "hbf-thermal-capacitance-j-per-c": {
+        "old": "3.0",
+        "new": "0.3"
       },
-      "hbf-thermal-shutdown-c": {
-        "old": null,
-        "new": "105"
+      "hbf-thermal-erase-energy-uj-per-block": {
+        "old": "150.0",
+        "new": "131.0"
+      },
+      "hbf-thermal-program-energy-pj-per-bit": {
+        "old": "60.0",
+        "new": "150.0"
+      },
+      "hbf-thermal-read-energy-pj-per-bit": {
+        "old": "6.0",
+        "new": "8.0"
+      },
+      "hbf-thermal-resistance-c-per-w": {
+        "old": "2.5",
+        "new": "2.0"
       }
     },
     "systems/miniquick/4hbm-4hbf.cfg": {
-      "hbf-thermal-severe-c": {
-        "old": null,
-        "new": "95"
+      "hbf-thermal-capacitance-j-per-c": {
+        "old": "3.0",
+        "new": "0.3"
       },
-      "hbf-thermal-shutdown-c": {
-        "old": null,
-        "new": "105"
+      "hbf-thermal-erase-energy-uj-per-block": {
+        "old": "150.0",
+        "new": "131.0"
+      },
+      "hbf-thermal-program-energy-pj-per-bit": {
+        "old": "60.0",
+        "new": "150.0"
+      },
+      "hbf-thermal-read-energy-pj-per-bit": {
+        "old": "6.0",
+        "new": "8.0"
+      },
+      "hbf-thermal-resistance-c-per-w": {
+        "old": "2.5",
+        "new": "2.0"
       }
     },
     "systems/miniquick/6hbm-2hbf.cfg": {
-      "hbf-thermal-severe-c": {
-        "old": null,
-        "new": "95"
+      "hbf-thermal-capacitance-j-per-c": {
+        "old": "3.0",
+        "new": "0.3"
       },
-      "hbf-thermal-shutdown-c": {
-        "old": null,
-        "new": "105"
+      "hbf-thermal-erase-energy-uj-per-block": {
+        "old": "150.0",
+        "new": "131.0"
+      },
+      "hbf-thermal-program-energy-pj-per-bit": {
+        "old": "60.0",
+        "new": "150.0"
+      },
+      "hbf-thermal-read-energy-pj-per-bit": {
+        "old": "6.0",
+        "new": "8.0"
+      },
+      "hbf-thermal-resistance-c-per-w": {
+        "old": "2.5",
+        "new": "2.0"
       }
     },
     "systems/miniquick/eight-stack-baseline.cfg": {
-      "hbf-thermal-severe-c": {
-        "old": null,
-        "new": "95"
+      "hbf-thermal-capacitance-j-per-c": {
+        "old": "3.0",
+        "new": "0.3"
       },
-      "hbf-thermal-shutdown-c": {
-        "old": null,
-        "new": "105"
+      "hbf-thermal-erase-energy-uj-per-block": {
+        "old": "150.0",
+        "new": "131.0"
+      },
+      "hbf-thermal-program-energy-pj-per-bit": {
+        "old": "60.0",
+        "new": "150.0"
+      },
+      "hbf-thermal-read-energy-pj-per-bit": {
+        "old": "6.0",
+        "new": "8.0"
+      },
+      "hbf-thermal-resistance-c-per-w": {
+        "old": "2.5",
+        "new": "2.0"
       }
     },
     "systems/sglang-small.cfg": {}
   },
-  "parameter_provenance_sha256": "775cc091473bfd6616c2b683bd5cf6bede16d045810bc7a9c91ad00731c98498"
+  "parameter_provenance_sha256": "608cbba02190a173d3731b348d0a0f94bf2da678b2199ebf724e840441c913ed"
 }

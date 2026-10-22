@@ -28,7 +28,7 @@ from serveloop.placement import ServeLoopPlacement
 
 # HBFSim commit that hbfsim_client/ and configs/systems/ were copied from;
 # configs/ocp-profile-source.json records the same commit.
-BUNDLED_HBFSIM_COMMIT = "22872328e06008e9b80b3b8e1a5a40c14739499a"
+BUNDLED_HBFSIM_COMMIT = "a4e98badf833a822645fc62533d466f61a085273"
 
 
 def describe_backend(simulator_path: Path | None) -> str:

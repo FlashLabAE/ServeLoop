@@ -133,7 +133,7 @@ The client and the engine change together, so pair their versions on purpose:
 
 | What | Where it is pinned |
 | --- | --- |
-| HBFSim commit that ServeLoop's bundled client and profiles copy | `2287232`, see [backend compatibility](docs/configuration.md#backend-compatibility) |
+| HBFSim commit that ServeLoop's bundled client and profiles copy | `a4e98ba`, see [backend compatibility](docs/configuration.md#backend-compatibility) |
 | Oldest ServeLoop that HBFSim's tests accept | `HBFSIM_SERVELOOP_MIN_REVISION` in HBFSim's `CMakeLists.txt` |
 | ServeLoop revision that HBFSim's CI tests | `SERVELOOP_REVISION` in HBFSim's `.github/workflows/ci.yml` |
 
@@ -227,6 +227,11 @@ serving profiler to cache-line address and arrival traces.
   need them. It has separate dependencies and is never selected by
   `serveloop run`. Both frontends use HBFSim's physical engine; switching
   changes scheduling and allocation, not the memory model.
+- The [vLLM capture replay](docs/vllm-capture.md)
+  (`python -m serveloop.vllm_capture`) replays a captured vLLM run, step by
+  step with vLLM's own block ids and KV cache events, as HBFSim batches. It
+  needs no vLLM at replay time, only the capture files and the checkpoint's
+  `config.json`.
 - The `serveloop.recovery` API models committed-boundary HBF media and KV
   recovery for HBFSim's bounded resident-KV studies. It does not model
   scheduler resume or persistent prefix caching.
@@ -245,6 +250,7 @@ serving profiler to cache-line address and arrival traces.
 | Coarse traces | [Enhanced coarse](docs/coarse-enhanced.md), [operator coverage](docs/coarse-coverage.md), [complete-model measurements](docs/coarse-evidence.md) |
 | GPU application addresses | [GPU address model](docs/gpu-address-model.md) |
 | Native SGLang | [SGLang](docs/sglang.md) |
+| Captured vLLM runs | [vLLM capture replay](docs/vllm-capture.md) |
 
 ## Repository layout
 
@@ -252,6 +258,7 @@ serving profiler to cache-line address and arrival traces.
 - `serveloop/windows/`: deterministic fixed-population windows and address
   remapping.
 - `serveloop/sglang/`: the optional native SGLang frontend.
+- `serveloop/vllm_capture/`: replay of captured vLLM runs.
 - `hbfsim_client/`: HBFSim's persistent-session client, copied from HBFSim.
 - `models/`: public, source-attributed architecture descriptors.
 - `examples/`: deterministic synthetic fixtures and quick-start inputs.

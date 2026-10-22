@@ -15,7 +15,7 @@ parts of this repository are verbatim copies of the same paths in
   physical default), and
 - `hbfsim_client/` (the persistent-session client).
 
-They currently match HBFSim `2287232`; the same commit is recorded in
+They currently match HBFSim `a4e98ba`; the same commit is recorded in
 `serveloop.hbfsim.BUNDLED_HBFSIM_COMMIT` and in
 `configs/ocp-profile-source.json`. Because the relative paths are the same
 in both repositories, `--system configs/systems/miniquick/4hbm-4hbf.cfg`
@@ -78,7 +78,7 @@ reservation, TP/EP or every scheduler version.
 
 ## Backend compatibility
 
-Supported backend: HBFSim `22872328e06008e9b80b3b8e1a5a40c14739499a`.
+Supported backend: HBFSim `a4e98badf833a822645fc62533d466f61a085273`.
 In the other direction, HBFSim's integration tests accept ServeLoop at or after
 `HBFSIM_SERVELOOP_MIN_REVISION` in its `CMakeLists.txt`.
 
@@ -89,21 +89,18 @@ change together with the engine. Running from the ServeLoop directory selects
 the bundled client; running from an HBFSim checkout selects HBFSim's. At the
 supported revision the two are identical.
 
-The latest synchronization (HBFSim `2287232`) replaced the thermal energy and
-RC values of the eight complete profiles with values derived from published
-sources: `hbf-thermal-read-energy-pj-per-bit` 6 → 8,
-`hbf-thermal-program-energy-pj-per-bit` 60 → 150,
-`hbf-thermal-erase-energy-uj-per-block` 150 → 131,
-`hbf-thermal-resistance-c-per-w` 2.5 → 2.0 and
-`hbf-thermal-capacitance-j-per-c` 3.0 → 0.3, so a stack's thermal time
-constant is 0.6 s and the derived light budget behind the 45 C boundary
-18 W per stack; HBFSim's `docs/reference/thermal-parameters.md` gives each
-derivation and its range. The previous synchronization (`514e796`) had added
-`hbf-thermal-severe-c=95` and `hbf-thermal-shutdown-c=105`, the two upper
-thresholds of the OCP section 9.2 thermal modes. `sglang-small.cfg` and every
-other value are unchanged. Windows in which a stack reaches its light
-threshold now pace media operations differently from the earlier copies;
-windows that stay below it reproduce their results.
+The latest synchronization (HBFSim `a4e98ba`) added the HBM thermal nodes to the
+eight complete profiles (`hbm-thermal-enable=true`, 45 C ambient, 2.0 C/W,
+0.25 J/C, 3 W static, 3.4 pJ/bit read and write, 85 C refresh doubling and
+95 C limit, telemetry only; HBM timing is unchanged) and the matching client,
+which exposes the stop receipt's `package_thermal` object. The package thermal
+network itself (`package-thermal-*`) stays off in the profiles and is enabled
+by HBFSim's `package-coupling-liquid-cooled` overlay. The previous
+synchronization (`2287232`) replaced the HBF thermal energy and RC values with
+values derived from published sources (read 8 pJ/bit, program 150 pJ/bit, erase
+131 uJ/block, 2.0 C/W, 0.3 J/C; HBFSim's `docs/reference/thermal-parameters.md`
+gives each derivation), and `514e796` before it had added the two upper OCP
+thermal thresholds. `sglang-small.cfg` and every other value are unchanged.
 
 The previous synchronization (`0e46ac0`) replaced HBM per-command timing with
 HBFSim's aggregate channel model. The engine rejects the removed keys. This is

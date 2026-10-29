@@ -133,7 +133,9 @@ class AnalyticCoverageCompiler(CoarseCoverageCompiler):
     supports_linear = True
     supports_chunked_prefill = True
 
-    def __init__(self, **kwargs):
+    def __init__(self, *, schedule_policy='legacy-prefetch', **kwargs):
+        from serveloop.coarse_schedule import validate_schedule_policy
+        self.schedule_policy = validate_schedule_policy(schedule_policy)
         models=kwargs['models']
         if len(models)!=1: raise ServeLoopError('analytic coverage currently supports one model')
         model=next(iter(models.values()))

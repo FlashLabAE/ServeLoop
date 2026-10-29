@@ -65,7 +65,7 @@ class ProfileCausalityTests(unittest.TestCase):
                         self.assertEqual(durations(original), durations(result))
                         self.assertTrue(all(o.duration_ns == 0 for o in result.operations if o.role == 'consumer/complete'))
                         self.assertEqual(original.audit_summary()['moe_expert_routes'], result.audit_summary()['moe_expert_routes'])
-                        self.assertNotIn('coarse_schedule', result.audit[result.operations[-1].id])
+                        self.assertEqual(result.audit[result.operations[-1].id]['coarse_schedule']['policy'], 'legacy-prefetch')
                         seen = set()
                         for op in result.operations:
                             self.assertTrue(set(op.dependencies) <= seen); seen.add(op.id)

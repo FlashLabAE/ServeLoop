@@ -206,3 +206,5 @@ The current contribution improves workload coverage for HBFSim; native software
 checks do not establish measured hardware traffic or inference accuracy.
 
 KV production and history/current-read dependencies are described in [coarse causality](coarse-causality.md). These fixes preserve the existing weight release policy.
+
+Generated coverage offers an optional [weight scheduling policy](coarse-scheduling.md); the default remains legacy-prefetch.

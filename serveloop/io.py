@@ -438,7 +438,11 @@ def timing_from_dict(
 def run_config_from_dict(
     value: Mapping[str, Any],
 ) -> tuple[SchedulerPolicy, TimingProvider, int]:
-    _exact(value, {"schema", "scheduler", "timing", "compute"}, "serving run config")
+    if "coarse_schedule_policy" in value:
+        from .coarse_schedule import validate_schedule_policy
+        validate_schedule_policy(value["coarse_schedule_policy"])
+    _exact({k:v for k,v in value.items() if k != "coarse_schedule_policy"},
+           {"schema", "scheduler", "timing", "compute"}, "serving run config")
     if value["schema"] != RUN_CONFIG_SCHEMA:
         raise ServeLoopError(
             "unsupported serving run config schema; expected "

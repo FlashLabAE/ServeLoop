@@ -1,8 +1,9 @@
 # Coarse KV causal dependencies
 
-This change fixes readiness and consumer dependencies without introducing a new
-weight schedule, layout, CLI flag or run-config field. Main's prefetch-depth
-behavior, weight release parents and on-demand expert reads remain unchanged.
+The causal fix establishes readiness and consumer dependencies independently of
+weight scheduling. Its default preserves main's weight release parents and
+on-demand expert reads. An optional [weight scheduling policy](coarse-scheduling.md)
+is a separate layer; no new weight layout or expert prefetch is introduced.
 
 ## Problem and behavior
 

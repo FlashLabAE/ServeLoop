@@ -84,7 +84,9 @@ class CoarseCoverageCompiler(ServeLoopCompiler):
 
     requires_causal_contract = False
 
-    def __init__(self, *, coverage_profile, cache_bound='off', **kwargs):
+    def __init__(self, *, coverage_profile, cache_bound='off', schedule_policy=None, **kwargs):
+        if schedule_policy is not None:
+            raise ServeLoopError('coarse schedule policy requires generated analytic coverage; captured profiles keep their schedule')
         super().__init__(**kwargs)
         self.coverage = coverage_profile
         if cache_bound not in ('off','ideal-temporaries'):
@@ -226,4 +228,7 @@ class CoarseCoverageCompiler(ServeLoopCompiler):
         if phase.get('consumer_contract'):
             from serveloop.coarse_causality import bind_producers
             result = bind_producers(result, phase)
+        if hasattr(self, 'schedule_policy'):
+            from serveloop.coarse_schedule import apply_weight_schedule
+            result = apply_weight_schedule(result, phase, self.schedule_policy)
         return result

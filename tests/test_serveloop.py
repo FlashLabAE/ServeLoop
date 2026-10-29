@@ -433,8 +433,12 @@ class ContractAndCompilerTests(unittest.TestCase):
             )
             self.assertEqual(
                 [by_id[item].role for item in kv_write.dependencies],
-                ["layer/1/compute"],
+                ["layer/2/kv_source_ready"],
             )
+            source = by_id[kv_write.dependencies[0]]
+            self.assertEqual(source.duration_ns, 0.0)
+            self.assertEqual(sorted(by_id[item].role for item in source.dependencies),
+                             ["attention/weights", "layer/1/compute"])
             complete = batch.operations[-1]
             self.assertEqual(complete.role, "batch/complete")
             self.assertIn(kv_write.id, complete.dependencies)

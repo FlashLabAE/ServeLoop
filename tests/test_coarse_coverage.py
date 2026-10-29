@@ -59,8 +59,8 @@ class CoarseCoverageTests(unittest.TestCase):
             return [(o.id,o.op,o.object_id,o.offset,o.bytes) for o in result.memory_operations
                 if not o.role.startswith('activation_coverage/')]
         self.assertEqual(persistent(coverage),persistent(ideal))
-        old=sum(o.bytes for o in original.memory_operations if o.role=='attention/kv_read')
-        new=sum(o.bytes for o in coverage.memory_operations if o.role=='attention/kv_read')
+        old=sum(o.bytes for o in original.memory_operations if o.role in ('attention/kv_read','attention/kv_read_current'))
+        new=sum(o.bytes for o in coverage.memory_operations if o.role in ('attention/kv_read','attention/kv_read_current'))
         self.assertEqual(new-old,28*1024)
         self.assertFalse(any(o.role.startswith('activation_coverage/') for o in ideal.operations))
         self.assertTrue(any(o.role=='activation_coverage/W' for o in coverage.operations))

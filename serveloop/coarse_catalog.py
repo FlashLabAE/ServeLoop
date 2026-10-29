@@ -139,12 +139,36 @@ def build_profile(model, request_digest, phase, tokens, context):
                           call('shared_silu',[('shared_gate_up','R',4*tokens*shared*ef),('shared_silu','W',2*tokens*shared*ef)]),
                           call('shared_down',[('shared_silu','R',2*tokens*shared*ef),('shared_output','W',x)]),
                           call('shared_combine',[('shared_output','R',x),('norm','R',x),('norm','W',x)])]
+        # This closed model generator declares roles; consumers never infer
+        # captured operator names or treat an offline route as execution.
+        route_calls = routing_layers[-1]
+        for item in route_calls + calls:
+            item['semantic'] = dict(kind='operation', requires_weights=[])
+        attention_calls = route_calls or calls
+        attention_calls[0]['semantic'] = dict(kind='input_norm', requires_weights=['attention/weights'])
+        declared = {'kv_store_source':'kv_source', 'kv_contiguous_copy':'kv_copy',
+                    'fused_attention':'attention', 'fused_latent_attention':'attention',
+                    'router_topk':'route_selection'}
+        for item in attention_calls:
+            if item['id'] in declared: item['semantic']['kind'] = declared[item['id']]
+        post = next(j for j,c in enumerate(attention_calls) if c['id']=='output_projection')+1
+        attention_calls[post]['semantic'] = dict(kind='post_norm', requires_weights=[])
+        if layer.is_moe:
+            for item in route_calls:
+                if item['id']=='router_logits':
+                    item['semantic'] = dict(kind='router', requires_weights=['moe/router_weights'])
+            calls[0]['semantic'] = dict(kind='dispatch', requires_weights=['moe/routed_expert_weights'])
+            for item in calls:
+                if item['id']=='shared_gate_up':
+                    item['semantic'] = dict(kind='shared_expert', requires_weights=['moe/shared_expert_weights'])
+        else:
+            attention_calls[post]['semantic'].update(requires_weights=['ffn/weights'])
         layers.append(calls)
     tail=[call('final_add_rmsnorm',[('residual','R',x),('norm','R',x),('residual','W',x),('norm','W',x)]),
           call('last_token_select',[('norm','R',2*h),('selected','W',2*h)]),
           call('lm_head',[('selected','R',2*h),('logits_16bit','W',2*model.vocab_size)]),
           call('logits_cast',[('logits_16bit','R',2*model.vocab_size),('logits_fp32','W',4*model.vocab_size)])]
-    p=dict(shape=[tokens,context],current_token_kv_read=phase=='decode',embedding=embedding,
+    p=dict(consumer_contract='model-semantic-v1',shape=[tokens,context],current_token_kv_read=phase=='decode',embedding=embedding,
            layers=layers,routing_layers=routing_layers,tail=tail)
     return CoarseCoverageProfile(dict(schema=SCHEMA,model_sha256=model.digest,request_trace_sha256=request_digest,
         layers=model.num_layers,workspace_bytes=cursor,objects=objects,
@@ -154,6 +178,7 @@ def build_profile(model, request_digest, phase, tokens, context):
 
 
 class CatalogCoverageCompiler(CoarseCoverageCompiler):
+    requires_causal_contract = True
     supports_roofline = True
     supports_linear = True
     supports_chunked_prefill = True

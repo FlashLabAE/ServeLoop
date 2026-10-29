@@ -204,3 +204,5 @@ lifetimes. Mixed batches and stateful-cache migration follow separately. These
 items are future work and are not required to use the current supported scope.
 The current contribution improves workload coverage for HBFSim; native software
 checks do not establish measured hardware traffic or inference accuracy.
+
+KV production and history/current-read dependencies are described in [coarse causality](coarse-causality.md). These fixes preserve the existing weight release policy.

@@ -42,7 +42,10 @@ class ServeLoopCompiler:
       weights of ``L + 1`` stream while ``L`` computes.
     * ``compute(L)``: one barrier whose duration comes from the timing
       provider; it depends on ``memory(L)`` and ``compute(L - 1)``.
-    * KV writes of the layer's newly processed tokens depend on ``compute(L)``.
+    * KV writes wait for a zero-time ``kv_source_ready(L)`` join of input
+      and attention-weight readiness. Without a profile this is a conservative
+      aggregate envelope, not a measured QKV completion. Historical KV reads do
+      not consume this forward's writes and therefore do not wait for them.
 
     MoE splits compute into attention/router and FFN phases. Only known
     weights may prefetch across layers; selected experts wait for this
@@ -319,6 +322,11 @@ class ServeLoopCompiler:
                         labels={"layer": layer_id},
                     )
                 )
+            kv_source = barrier(
+                role=f"layer/{layer_id}/kv_source_ready",
+                dependencies=(*memory_ops, compute_barriers[-1] if compute_barriers else embedded),
+            )
+            audit[kv_source]["dependency_basis"] = "aggregate input/weight readiness, not a timed or minimal hardware producer"
             layer_writes = []
             for batch_slice, request in rows:
                 layer_writes.append(
@@ -328,7 +336,7 @@ class ServeLoopCompiler:
                         offset=batch_slice.token_begin * layer.kv_bytes_per_token,
                         byte_count=batch_slice.token_count * layer.kv_bytes_per_token,
                         op="W",
-                        dependencies=(compute_barriers[-1] if compute_barriers else embedded,),
+                        dependencies=(kv_source,),
                         labels={
                             "request_id": request.request_id,
                             "layer": layer_id,
@@ -356,7 +364,7 @@ class ServeLoopCompiler:
                             * layer.kv_bytes_per_token
                         ),
                         op="R",
-                        dependencies=(memory_root, *layer_writes),
+                        dependencies=(memory_root,),
                         labels={
                             "request_id": request.request_id,
                             "layer": layer_id,

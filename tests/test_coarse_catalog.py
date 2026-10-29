@@ -29,7 +29,7 @@ class CatalogCoverageTests(unittest.TestCase):
                 plain=ServeLoopCompiler(**{**kw,"models":{old.model_id:old}});enhanced=CatalogCoverageCompiler(**kw)
                 for batch in bs:
                     a=plain.compile(batch);b=enhanced.compile(batch)
-                    weights=lambda c:[(o.op,o.object_id,o.offset,o.bytes) for o in c.memory_operations if o.object_id.startswith('model/')]
+                    weights=lambda c:sorted((o.op,o.object_id,o.offset,o.bytes) for o in c.memory_operations if o.object_id.startswith('model/'))
                     self.assertEqual(weights(a),weights(b))
                     self.assertEqual(a.audit_summary()['moe_expert_routes'],b.audit_summary()['moe_expert_routes'])
                     self.assertGreater(sum(o.bytes for o in b.memory_operations if o.role=='activation_coverage/W'),0)

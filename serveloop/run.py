@@ -380,6 +380,7 @@ def run_experiment(
     coarse_coverage_profile: Path | None = None,
     coarse_cache_bound: str = 'off',
     coarse_coverage_policy: str | None = None,
+    coarse_schedule_policy: str | None = None,
     coarse_l2_capacity_bytes: int | None = None,
     coarse_l2_write_policy: str = 'write-allocate-fetch',
     prefix_image: PrefixImage | None = None,
@@ -428,6 +429,13 @@ def run_experiment(
         else:
             raise ServeLoopError('unsupported analytic coverage policy')
         compiler_options = dict(cache_bound=coarse_cache_bound)
+    if coarse_schedule_policy is not None:
+        from serveloop.coarse_schedule import validate_schedule_policy
+        from serveloop.coarse_analytic import POLICY_ALIASES
+        validate_schedule_policy(coarse_schedule_policy)
+        if coarse_coverage_policy not in (*POLICY_ALIASES, 'model-derived'):
+            raise ServeLoopError('coarse schedule policy requires generated analytic coverage')
+        compiler_options['schedule_policy'] = coarse_schedule_policy
     compiler = compiler_type(
         models=models,
         request_trace=request_trace,
@@ -566,6 +574,25 @@ class ServingInputs:
     input_artifacts: dict[str, Any]
 
 
+def _resolve_coarse_run_config(run_config, args):
+    """Do not let shared snapshot inputs silently ignore this policy."""
+    from serveloop.coarse_analytic import POLICY_ALIASES
+    from serveloop.coarse_schedule import validate_schedule_policy
+    resolved = dict(run_config)
+    value = getattr(args, 'coarse_schedule_policy', None)
+    if value is not None:
+        if 'coarse_schedule_policy' in resolved:
+            raise ServeLoopError('choose coarse schedule in CLI or run config, not both')
+        resolved['coarse_schedule_policy'] = value
+    generated = getattr(args, 'coarse_coverage_policy', None) in (*POLICY_ALIASES, 'model-derived')
+    if 'coarse_schedule_policy' in resolved and not generated:
+        raise ServeLoopError('coarse schedule policy requires generated analytic coverage')
+    if generated:
+        resolved.setdefault('coarse_schedule_policy', 'legacy-prefetch')
+        validate_schedule_policy(resolved['coarse_schedule_policy'])
+    return resolved
+
+
 def resolve_serving_inputs(
     args: argparse.Namespace, parser: argparse.ArgumentParser, *, model_derived_coverage: bool = False
 ) -> ServingInputs:
@@ -625,6 +652,7 @@ def resolve_serving_inputs(
             efficiency=args.efficiency,
             prefetch_depth=args.prefetch_depth,
         )
+    run_config = _resolve_coarse_run_config(run_config, args)
     policy, timing, prefetch_depth = run_config_from_dict(run_config)
     if timing.timing_model == "gpu_calibrated":
         models = {key: timing.profile.bind_model(model, timing.model_bindings[key])
@@ -717,6 +745,8 @@ def build_parser() -> argparse.ArgumentParser:
         help='opt-in digest-bound operator coverage profile; memory_only, covered shapes only')
     serving.add_argument('--coarse-coverage-policy',choices=('dense-16bit-swiglu','dense-bf16-swiglu','model-derived'),
         help='model-derived B1 tensor footprints with explicit fusion/attention assumptions')
+    serving.add_argument('--coarse-schedule-policy', choices=('legacy-prefetch','consumer-order'),
+        help='generated coverage weight release; default legacy-prefetch preserves main behavior')
     serving.add_argument('--coarse-cache-bound',choices=('off','ideal-temporaries'),
         help='temporary-traffic sensitivity bound with a coverage profile or policy; not a GPU cache simulator')
     serving.add_argument('--coarse-l2-write-policy',choices=('write-allocate-fetch','full-store-no-fetch'),
@@ -751,6 +781,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "sample_seed",
         "coarse_coverage_profile",
         "coarse_coverage_policy",
+        "coarse_schedule_policy",
         "coarse_cache_bound",
         "coarse_l2_capacity_bytes",
         "coarse_l2_write_policy",
@@ -842,6 +873,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 sector_bytes=32,model='fully_associative_sector_lru_range',
                 initial='cold',write_policy=args.coarse_l2_write_policy or 'write-allocate-fetch',final='dirty drain',
                 traffic_domain='modeled post-L2 demand; not measured hardware traffic')
+        if args.coarse_coverage_policy is not None:
+            input_artifacts['coarse_coverage']['schedule_policy'] = run_config['coarse_schedule_policy']
+            if run_config['coarse_schedule_policy'] == 'consumer-order' and 'compute' in input_artifacts['coarse_coverage']:
+                input_artifacts['coarse_coverage']['compute']['overlap'] = 'consumer-order aggregate weight release; compute budgets unchanged'
         for model in models.values():
             write_json_atomic(
                 output_directory / f"model-{model.model_id}.json", model.canonical()
@@ -862,6 +897,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             input_artifacts=input_artifacts,
             coarse_coverage_profile=args.coarse_coverage_profile,
             coarse_coverage_policy=args.coarse_coverage_policy,
+            coarse_schedule_policy=run_config.get('coarse_schedule_policy'),
             coarse_cache_bound=args.coarse_cache_bound or 'off',
             coarse_l2_capacity_bytes=args.coarse_l2_capacity_bytes,
             coarse_l2_write_policy=args.coarse_l2_write_policy or 'write-allocate-fetch',

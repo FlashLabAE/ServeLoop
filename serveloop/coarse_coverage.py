@@ -46,6 +46,13 @@ class CoarseCoverageProfile:
                 routing_layers = p.get('routing_layers', [[] for _ in p['layers']])
                 if len(routing_layers) != document['layers']:
                     raise ValueError('inconsistent routing-layer coverage')
+                if 'consumer_contract' in p:
+                    from serveloop.coarse_causality import validate_contract
+                    validate_contract(p)
+                    for calls in p['layers'] + routing_layers:
+                        for item in calls:
+                            if len(item['stages'])!=1 or item['stages'][0]['kernel'] is not None:
+                                raise ValueError('model semantic contract requires one declared tensor stage per call')
                 for call in p['embedding'] + sum(p['layers'],[]) + sum(routing_layers,[]) + p['tail']:
                     if not isinstance(call['id'],str) or not isinstance(call['operator'],str):
                         raise ValueError('invalid call identity')
@@ -75,7 +82,11 @@ class CoarseCoverageCompiler(ServeLoopCompiler):
     supports_linear = False
     supports_chunked_prefill = False
 
-    def __init__(self, *, coverage_profile, cache_bound='off', **kwargs):
+    requires_causal_contract = False
+
+    def __init__(self, *, coverage_profile, cache_bound='off', schedule_policy=None, **kwargs):
+        if schedule_policy is not None:
+            raise ServeLoopError('coarse schedule policy requires generated analytic coverage; captured profiles keep their schedule')
         super().__init__(**kwargs)
         self.coverage = coverage_profile
         if cache_bound not in ('off','ideal-temporaries'):
@@ -104,22 +115,39 @@ class CoarseCoverageCompiler(ServeLoopCompiler):
         # Tail profile is bound to one output-emitting forward of this shape.
         if not s.emits_output and not (self.supports_chunked_prefill and s.phase == 'prefill'):
             raise ServeLoopError('coarse profile requires an output-emitting forward')
+        if self.requires_causal_contract:
+            from serveloop.coarse_causality import validate_contract
+            validate_contract(phase)
         base = super().compile(batch)
         model = self.models[batch.model_id]
         if phase['current_token_kv_read']:
-            ops=[]
+            # Keep history independent of this forward's KV producer. Only the
+            # appended current-token read requires its corresponding KV write.
+            ops=[];audit=dict(base.audit)
             for o in base.operations:
+                ops.append(o)
                 if o.role == 'attention/kv_read':
                     layer = base.audit[o.id]['layer']
-                    o = replace(o,bytes=o.bytes+s.token_count*model.layers[layer].kv_bytes_per_token)
-                ops.append(o)
-            base = replace(base,operations=tuple(ops))
+                    write=next(w for w in base.memory_operations
+                        if w.role=='attention/kv_write' and w.object_id==o.object_id)
+                    identifier=o.id+'/current'
+                    ops.append(replace(o,id=identifier,role='attention/kv_read_current',
+                        offset=o.offset+o.bytes,bytes=s.token_count*model.layers[layer].kv_bytes_per_token,
+                        dependencies=(write.id,)))
+                    audit[identifier]=dict(audit[o.id],role='attention/kv_read_current',
+                        traffic_semantics='current_token_read_after_corresponding_publication')
+                    audit[o.id]=dict(audit[o.id],kv_read_scope='historical-only')
+            additions={o.id.removesuffix('/current'):o.id for o in ops if o.role=='attention/kv_read_current'}
+            ops=[replace(o,dependencies=tuple(dict.fromkeys((*o.dependencies,
+                *(additions[d] for d in o.dependencies if d in additions))))) for o in ops]
+            base = replace(base,operations=tuple(ops),audit=audit)
         output=[];audit=dict(base.audit);count=0;joins=0
 
-        def stages(calls,dependencies):
+        def stages(calls,dependencies,layer=None,lane=None):
             nonlocal count,joins
             previous=tuple(dependencies)
-            for call in calls:
+            for call_index,call in enumerate(calls):
+                call_ids=[]
                 for stage in call['stages']:
                     ids=[]
                     for obj,op,offset,size in stage['ranges']:
@@ -130,11 +158,13 @@ class CoarseCoverageCompiler(ServeLoopCompiler):
                         output.append(SemanticOperation(id=identifier,op=direction,
                             object_id=f'workspace/{model.model_id}',offset=offset,bytes=size,
                             duration_ns=0.0,dependencies=previous,role=role))
-                        ids.append(identifier)
+                        ids.append(identifier);call_ids.append(identifier)
                         audit[identifier]=dict(role=role,call=call['id'],operator=call['operator'],
                             observed_object=coverage.objects[obj],attention_kernel=stage['kernel'],
                             traffic_semantics='kernel/tensor coverage; not measured post-cache traffic',
                             coarse_coverage_sha256=coverage.digest)
+                        if layer is not None and phase.get('consumer_contract'):
+                            audit[identifier]['consumer_position']=[layer,lane,call_index]
                     if ids:
                         if stage['kernel'] is not None:
                             identifier=f'serve/b{batch.batch_id}/attention_join{joins}';joins+=1
@@ -146,6 +176,17 @@ class CoarseCoverageCompiler(ServeLoopCompiler):
                             previous=(identifier,)
                         else:
                             previous=tuple(ids)
+                if layer is not None and phase.get('consumer_contract'):
+                    slot='r' if lane=='routing' else 'c'
+                    identifier=f'consumer/b{batch.batch_id}/l{layer}/{slot}{call_index}'
+                    role='consumer/complete'
+                    output.append(SemanticOperation(id=identifier,op=None,object_id=None,offset=0,
+                        bytes=0,duration_ns=0.0,dependencies=previous,role=role))
+                    audit[identifier]=dict(role=role,layer=layer,call=call['id'],
+                        consumer=call['id'],operator=call['operator'],consumer_position=[layer,lane,call_index],
+                        semantic=call['semantic'],memory_ids=call_ids,
+                        source='explicit model semantic completion; zero added compute')
+                    previous=(identifier,)
             return previous
 
         for operation in base.operations:
@@ -155,17 +196,21 @@ class CoarseCoverageCompiler(ServeLoopCompiler):
             elif operation.role.startswith('layer/') and operation.role.endswith('/routing_ready'):
                 layer=int(operation.role.split('/')[1])
                 calls=phase.get('routing_layers',[[] for _ in model.layers])[layer]
-                deps=tuple(dict.fromkeys((*deps,*stages(calls,deps))))
+                deps=tuple(dict.fromkeys((*deps,*stages(calls,deps,layer,'routing'))))
             elif operation.role.startswith('layer/') and operation.role.endswith('/compute'):
                 layer=int(operation.role.split('/')[1])
-                deps=tuple(dict.fromkeys((*deps,*stages(phase['layers'][layer],deps))))
+                deps=tuple(dict.fromkeys((*deps,*stages(phase['layers'][layer],deps,layer,'body'))))
             elif operation.role=='tail/compute':
                 deps=tuple(dict.fromkeys((*deps,*stages(phase['tail'] if s.emits_output else phase['tail'][:1],deps))))
             output.append(replace(operation,dependencies=deps))
         audit[output[-1].id]=dict(audit[output[-1].id],coarse_coverage_sha256=coverage.digest,
             coarse_cache_bound=self.cache_bound,
             cache_bound_scope='temporary coverage only; weight/KV traffic unchanged',
-            coverage_evidence=coverage.document.get('evidence',{}))
+            coverage_evidence=coverage.document.get('evidence',{}),
+            coarse_kv_contract=dict(mode='declared-model-semantics-await-consumer-binding' if phase.get('consumer_contract') else 'abstract-base-KV-floor',
+                captured_operator_inference=False,
+                base_source_gate_present=any(o.role.endswith('/kv_source_ready') for o in base.operations),
+                qualification='consumer compiler binds declared producer joins; captured profiles retain base dependency floor only'))
         if self.timing.timing_model == 'roofline':
             audit[output[-1].id]['coarse_compute'] = dict(
                 model='original layer-aggregate FLOP roofline',
@@ -179,4 +224,11 @@ class CoarseCoverageCompiler(ServeLoopCompiler):
                 provider=self.timing.canonical(), calibrated=False,
                 compute_nodes='original durations and MoE routing split preserved',
                 overlap='next-layer weight/KV prefetch; covered layer activations precede aggregate compute')
-        return replace(base,operations=tuple(output),audit=audit)
+        result = replace(base,operations=tuple(output),audit=audit)
+        if phase.get('consumer_contract'):
+            from serveloop.coarse_causality import bind_producers
+            result = bind_producers(result, phase)
+        if hasattr(self, 'schedule_policy'):
+            from serveloop.coarse_schedule import apply_weight_schedule
+            result = apply_weight_schedule(result, phase, self.schedule_policy)
+        return result

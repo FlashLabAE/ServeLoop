@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def budgets(result):
-    return {o.id: (o.role, o.duration_ns) for o in result.operations if o.is_barrier}
+    return {o.id: (o.role, o.duration_ns) for o in result.operations if o.is_barrier and o.role!='consumer/complete'}
 
 
 class ExtendedScopeTests(unittest.TestCase):
@@ -37,8 +37,8 @@ class ExtendedScopeTests(unittest.TestCase):
                     with self.subTest(model=path.name, timing=timing, batch=batch.batch_id):
                         a = original.compile(batch); b = enhanced.compile(batch)
                         self.assertEqual(budgets(a), budgets(b))
-                        weights = lambda x: [(o.id, o.op, o.object_id, o.offset, o.bytes)
-                            for o in x.memory_operations if o.object_id.startswith('model/')]
+                        weights = lambda x: sorted((o.id, o.op, o.object_id, o.offset, o.bytes)
+                            for o in x.memory_operations if o.object_id.startswith('model/'))
                         self.assertEqual(weights(a), weights(b))
                         writes = lambda x: [(o.object_id, o.offset, o.bytes) for o in x.memory_operations
                             if o.role == 'attention/kv_write']

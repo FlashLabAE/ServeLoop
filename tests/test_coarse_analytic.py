@@ -47,7 +47,7 @@ class AnalyticTests(unittest.TestCase):
                 token_ids=tuple(range(ctx+1))),))
             result=self.compiler(request_trace=trace).compile(self.batch('decode',1,ctx))
             self.assertEqual(sum(o.bytes for o in result.memory_operations
-                if o.role=='attention/kv_read'),28*(ctx+1)*1024)
+                if o.role in ('attention/kv_read','attention/kv_read_current')),28*(ctx+1)*1024)
             totals.append(sum(o.bytes for o in result.memory_operations
                 if o.role.startswith('activation_coverage/')))
         self.assertEqual(len(set(totals)),1)

@@ -100,6 +100,16 @@ def build_profile(model, request_digest, phase, tokens, context):
             call('gate_up_projection',[('hidden','R',x),('gate_up','W',4*tokens*f)]),
             call('silu_and_mul',[('gate_up','R',4*tokens*f),('silu','W',2*tokens*f)]),
             call('down_projection',[('silu','R',2*tokens*f),('norm','W',x)])])
+        # Producer-declared semantics, separate from display/operator identities.
+        for item in calls:
+            item['semantic'] = dict(kind='operation', requires_weights=[])
+        calls[0]['semantic'] = dict(kind='input_norm', requires_weights=['attention/weights'])
+        declared = {'kv_store_source':'kv_source', 'kv_contiguous_copy':'kv_copy',
+                    'fused_attention':'attention'}
+        for item in calls:
+            if item['id'] in declared: item['semantic']['kind'] = declared[item['id']]
+        post = next(j for j,c in enumerate(calls) if c['id']=='output_projection')+1
+        calls[post]['semantic'] = dict(kind='post_norm', requires_weights=['ffn/weights'])
         layers.append(calls)
     tail=[call('final_add_rmsnorm',[('residual','R',x),('norm','R',x),
                                    ('residual','W',x),('norm','W',x)]),
@@ -108,7 +118,7 @@ def build_profile(model, request_digest, phase, tokens, context):
           call('logits_cast',[('logits_16bit','R',2*model.vocab_size),
                               ('logits_fp32','W',4*model.vocab_size)])]
     # Placeholder for the other phase is never selected; preserve v1 validation.
-    p=dict(shape=[tokens,context],current_token_kv_read=phase=='decode',
+    p=dict(consumer_contract='model-semantic-v1',shape=[tokens,context],current_token_kv_read=phase=='decode',
            embedding=embedding,layers=layers,tail=tail)
     return CoarseCoverageProfile(dict(schema=SCHEMA,model_sha256=model.digest,
         request_trace_sha256=request_digest,layers=model.num_layers,
@@ -118,11 +128,14 @@ def build_profile(model, request_digest, phase, tokens, context):
 
 
 class AnalyticCoverageCompiler(CoarseCoverageCompiler):
+    requires_causal_contract = True
     supports_roofline = True
     supports_linear = True
     supports_chunked_prefill = True
 
-    def __init__(self, **kwargs):
+    def __init__(self, *, schedule_policy='legacy-prefetch', **kwargs):
+        from serveloop.coarse_schedule import validate_schedule_policy
+        self.schedule_policy = validate_schedule_policy(schedule_policy)
         models=kwargs['models']
         if len(models)!=1: raise ServeLoopError('analytic coverage currently supports one model')
         model=next(iter(models.values()))

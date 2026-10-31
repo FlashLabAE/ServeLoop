@@ -15,7 +15,7 @@ parts of this repository are verbatim copies of the same paths in
   physical default), and
 - `hbfsim_client/` (the persistent-session client).
 
-They currently match HBFSim `a4e98ba`; the same commit is recorded in
+They currently match HBFSim `332036a`; the same commit is recorded in
 `serveloop.hbfsim.BUNDLED_HBFSIM_COMMIT` and in
 `configs/ocp-profile-source.json`. Because the relative paths are the same
 in both repositories, `--system configs/systems/miniquick/4hbm-4hbf.cfg`
@@ -78,7 +78,7 @@ reservation, TP/EP or every scheduler version.
 
 ## Backend compatibility
 
-Supported backend: HBFSim `a4e98badf833a822645fc62533d466f61a085273`.
+Supported backend: HBFSim `332036a3293e4a54350cf5fb24de66e3c10e82bd`.
 In the other direction, HBFSim's integration tests accept ServeLoop at or after
 `HBFSIM_SERVELOOP_MIN_REVISION` in its `CMakeLists.txt`.
 
@@ -89,7 +89,12 @@ change together with the engine. Running from the ServeLoop directory selects
 the bundled client; running from an HBFSim checkout selects HBFSim's. At the
 supported revision the two are identical.
 
-The latest synchronization (HBFSim `a4e98ba`) added the HBM thermal nodes to the
+The latest synchronization (HBFSim `332036a`) changes no profile value. It
+brings the provenance registry entries for HBFSim's opt-in fine-grained read
+frontend (read MSHR and shared-HBM write buffer keys, off in the profiles) and
+the matching client, which adds `binary_transactions.py` and
+`live_transactions.py` and checks submission receipts against each batch's
+transaction census. The synchronization before it (`a4e98ba`) added the HBM thermal nodes to the
 eight complete profiles (`hbm-thermal-enable=true`, 45 C ambient, 2.0 C/W,
 0.25 J/C, 3 W static, 3.4 pJ/bit read and write, 85 C refresh doubling and
 95 C limit, telemetry only; HBM timing is unchanged) and the matching client,
